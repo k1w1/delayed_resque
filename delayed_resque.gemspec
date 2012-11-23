@@ -1,4 +1,5 @@
 $:.push File.expand_path("../lib", __FILE__)
+require "delayed_resque/version"
 
 Gem::Specification.new do |s|
   s.name = "delayed_resque"
