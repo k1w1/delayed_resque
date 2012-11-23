@@ -1,3 +1,5 @@
+require 'active_record'
+
 module DelayedResque
   class PerformableMethod < Struct.new(:object, :method, :args)
     CLASS_STRING_FORMAT = /^CLASS\:([A-Z][\w\:]+)$/
@@ -20,7 +22,7 @@ module DelayedResque
     end
 
     def self.perform(object, method, *args)
-      load(object).send(method, *args.map{|a| load(a)})
+      self.load(object).send(method, *args.map{|a| self.load(a)})
     rescue ActiveRecord::RecordNotFound
       RAILS_DEFAULT_LOGGER.warn("PerformableMethod: failed to find record for #{object.inspect}")
       # We cannot do anything about objects which were deleted in the meantime
@@ -28,12 +30,12 @@ module DelayedResque
     end
 
     def dump_args
-      [self.object, self.method, self.args]
+      [self.object, self.method].concat(self.args)
     end
 
     private
 
-    def load(arg)
+    def self.load(arg)
       case arg
       when CLASS_STRING_FORMAT then $1.constantize
       when AR_STRING_FORMAT then $1.constantize.find($2)

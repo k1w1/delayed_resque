@@ -1,8 +1,10 @@
+require 'active_support'
+
 module DelayedResque
   class DelayProxy < ActiveSupport::BasicObject
     def initialize(target, options)
       @target = target
-      @options = {:queue => :default}.update(options.symbolize_keys)
+      @options = {:queue => :default}.update(options)
     end
 
     def method_missing(method, *args)

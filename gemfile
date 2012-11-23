@@ -1,0 +1,11 @@
+source :rubygems
+
+gem 'resque'
+gem 'rails'
+
+group :test do
+  gem 'rspec'
+  gem 'rspec-rails'
+  gem 'resque_spec'
+  gem 'sqlite3'
+end

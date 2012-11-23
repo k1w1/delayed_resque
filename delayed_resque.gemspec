@@ -14,8 +14,8 @@ Gem::Specification.new do |s|
   s.require_paths = ["lib"]
   s.test_files = Dir.glob('spec/**/*')
 
-  s.add_dependency 'rails', "~> 3.1"
+  s.add_dependency 'rails'
   s.add_dependency 'resque'
   
-  s.add_development_dependency "rspec-rails", "~> 2.8.0"
+  s.add_development_dependency "rspec"
 end
