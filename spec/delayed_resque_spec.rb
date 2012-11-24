@@ -15,7 +15,7 @@ describe DelayedResque do
 
     it "can delay method" do
       DummyObject.delay.first_method(123)
-      DelayedResque::PerformableMethod.should have_queued("CLASS:DummyObject", :first_method, 123).in(:default)
+      DelayedResque::PerformableMethod.should have_queued({"obj"=>"CLASS:DummyObject", "method"=>:first_method, "args"=>[123]}).in(:default)
     end
     
     it "delayed method is called" do

@@ -2,21 +2,22 @@ require 'active_support'
 
 module DelayedResque
   class DelayProxy < ActiveSupport::BasicObject
-    def initialize(target, options)
+    def initialize(payload_class, target, options)
+      @payload_class = payload_class
       @target = target
-      @options = {:queue => :default}.update(options)
+      @options = {:queue => "default"}.update(options)
     end
 
     def method_missing(method, *args)
-      performable = PerformableMethod.new(@target, method.to_sym, args)
-      ::Resque.enqueue_to(@options[:queue], PerformableMethod, *performable.dump_args)
+      performable = @payload_class.new(@target, method.to_sym, args)
+      ::Resque.enqueue_to(@options[:queue], @payload_class, performable.store)
     end
   end
   
   
   module MessageSending
     def delay(options = {})
-      DelayProxy.new(self, options)
+      DelayProxy.new(PerformableMethod, self, options)
     end
     alias __delay__ delay
   end

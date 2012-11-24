@@ -21,7 +21,10 @@ module DelayedResque
       end
     end
 
-    def self.perform(object, method, *args)
+    def self.perform(options)
+      object = options["obj"]
+      method = options["method"]
+      args = options["args"]
       self.load(object).send(method, *args.map{|a| self.load(a)})
     rescue ActiveRecord::RecordNotFound
       Rails.logger.warn("PerformableMethod: failed to find record for #{object.inspect}")
@@ -29,8 +32,8 @@ module DelayedResque
       true
     end
 
-    def dump_args
-      [self.object, self.method].concat(self.args)
+    def store
+      {"obj" => self.object, "method" => self.method, "args" => self.args}
     end
 
     private
