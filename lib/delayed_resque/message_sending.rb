@@ -9,7 +9,7 @@ module DelayedResque
     end
 
     def method_missing(method, *args)
-      performable = @payload_class.new(@target, method.to_sym, args)
+      performable = @payload_class.new(@target, method.to_sym, @options, args)
       ::Resque.enqueue_to(@options[:queue], @payload_class, performable.store)
     end
   end

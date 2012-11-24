@@ -5,12 +5,13 @@ module DelayedResque
     CLASS_STRING_FORMAT = /^CLASS\:([A-Z][\w\:]+)$/
     AR_STRING_FORMAT = /^AR\:([A-Z][\w\:]+)\:(\d+)$/
 
-    def initialize(object, method, args)
+    def initialize(object, method, options, args)
       raise NoMethodError, "undefined method `#{method}' for #{object.inspect}" unless object.respond_to?(method)
 
-      self.object = dump(object)
-      self.args = args.map { |a| dump(a) }
-      self.method = method.to_sym
+      @object = dump(object)
+      @method = method.to_sym
+      @options = options
+      @args = args.map { |a| dump(a) }
     end
 
     def display_name
@@ -33,7 +34,7 @@ module DelayedResque
     end
 
     def store
-      {"obj" => self.object, "method" => self.method, "args" => self.args}
+      {"obj" => @object, "method" => @method, "args" => @args}.merge(@options[:params] || {})
     end
 
     private

@@ -31,6 +31,11 @@ describe DelayedResque do
       }.to raise_error(NoMethodError)
     end
     
+    it "can pass additional params" do
+      DummyObject.delay(:params => {"k" => "v"}).first_method(123)
+      DelayedResque::PerformableMethod.should have_queued({"obj"=>"CLASS:DummyObject", "method"=>:first_method, "args"=>[123], "k" => "v"}).in(:default)
+    end
+    
   end
   
   context "active record methods can be delayed" do
