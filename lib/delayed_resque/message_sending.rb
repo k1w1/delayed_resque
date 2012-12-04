@@ -10,7 +10,13 @@ module DelayedResque
 
     def method_missing(method, *args)
       performable = @payload_class.new(@target, method.to_sym, @options, args)
-      ::Resque.enqueue_to(@options[:queue], @payload_class, performable.store)
+      if @options[:at]
+        ::Resque.enqueue_at_with_queue(@options[:queue], @options[:at], @payload_class, performable.store) 
+      elsif @options[:in]
+        ::Resque.enqueue_in_with_queue(@options[:queue], @options[:in], @payload_class, performable.store)
+      else
+        ::Resque.enqueue_to(@options[:queue], @payload_class, performable.store)
+      end
     end
   end
   
