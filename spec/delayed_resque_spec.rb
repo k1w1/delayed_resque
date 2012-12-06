@@ -5,14 +5,15 @@ describe DelayedResque do
     ResqueSpec.reset!
   end
 
-  context "class methods can be delayed" do
-    class DummyObject
-      include DelayedResque::MessageSending
-    
-      def self.first_method(param)
-      end
+  class DummyObject      
+    include DelayedResque::MessageSending
+    @queue = "default"
+  
+    def self.first_method(param)
     end
-
+  end
+  
+  context "class methods can be delayed" do
     it "can delay method" do
       DummyObject.delay.first_method(123)
       DelayedResque::PerformableMethod.should have_queued({"obj"=>"CLASS:DummyObject", "method"=>:first_method, "args"=>[123]}).in(:default)
@@ -77,22 +78,39 @@ describe DelayedResque do
   end
   
   context "methods can be delayed for an interval" do
-    class DummyObject
-      include DelayedResque::MessageSending
-    
-      def self.first_method(param)
-      end
-    end
-
     it "can delay method" do
       DummyObject.delay(:in => 5.minutes).first_method(123)
-      DelayedResque::PerformableMethod.should have_scheduled({"obj"=>"CLASS:DummyObject", "method"=>:first_method, "args"=>[123]}).in(5 * 60).queue("default")
+      DelayedResque::PerformableMethod.should have_scheduled({"obj"=>"CLASS:DummyObject", "method"=>:first_method, "args"=>[123]}).in(5 * 60)
     end
     
     it "can run at specific time" do
       at_time = Time.now.utc + 10.minutes
       DummyObject.delay(:at => at_time).first_method(123)
-      DelayedResque::PerformableMethod.should have_scheduled({"obj"=>"CLASS:DummyObject", "method"=>:first_method, "args"=>[123]}).at(at_time).queue("default")
+      DelayedResque::PerformableMethod.should have_scheduled({"obj"=>"CLASS:DummyObject", "method"=>:first_method, "args"=>[123]}).at(at_time)
+      DelayedResque::PerformableMethod.should have_schedule_size_of(1)
+    end
+  end
+  
+  context "unique jobs" do
+    it "can remove preceeding jobs" do
+      DummyObject.delay.first_method(123)
+      DelayedResque::PerformableMethod.should have_queued({"obj"=>"CLASS:DummyObject", "method"=>:first_method, "args"=>[123]})
+      DelayedResque::PerformableMethod.should have_queue_size_of(1)
+      DummyObject.delay.first_method(124)
+      DelayedResque::PerformableMethod.should have_queue_size_of(2)
+      DummyObject.delay(:unique => true).first_method(123)
+      DelayedResque::PerformableMethod.should have_queue_size_of(2)
+    end
+    
+    it "can remove preceeding delayed jobs" do
+      at_time = Time.now.utc + 10.minutes
+      DummyObject.delay(:at => at_time).first_method(123)
+      DelayedResque::PerformableMethod.should have_scheduled({"obj"=>"CLASS:DummyObject", "method"=>:first_method, "args"=>[123]}).at(at_time)
+      DelayedResque::PerformableMethod.should have_schedule_size_of(1)
+      DummyObject.delay(:at => at_time + 1).first_method(123)
+      DelayedResque::PerformableMethod.should have_schedule_size_of(2)
+      DummyObject.delay(:at => at_time + 2, :unique => true).first_method(123)
+      DelayedResque::PerformableMethod.should have_schedule_size_of(1)
     end
   end
 end
