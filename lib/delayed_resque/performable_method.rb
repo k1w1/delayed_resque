@@ -30,15 +30,17 @@ module DelayedResque
       object = options["obj"]
       method = options["method"]
       args = options["args"]
+      arg_objects = []
       loaded_object = 
         begin
+          arg_objects = args.map{|a| self.load(a)}
           self.load(object)
         rescue ActiveRecord::RecordNotFound
           Rails.logger.warn("PerformableMethod: failed to find record for #{object.inspect}")
           # We cannot do anything about objects which were deleted in the meantime
           return true
         end
-      loaded_object.send(method, *args.map{|a| self.load(a)})
+      loaded_object.send(method, *arg_objects)
     end
 
     def store
