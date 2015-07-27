@@ -44,7 +44,7 @@ module DelayedResque
     end
 
     def store
-      {"obj" => @object, "method" => @method, "args" => @args}.merge(@options[:params] || {})
+      {"obj" => @object, "method" => @method, "args" => @args, "t" => Time.now.to_f}.merge(@options[:params] || {})
     end
 
     private
