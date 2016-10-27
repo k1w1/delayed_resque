@@ -1,7 +1,7 @@
 require 'active_support'
 
 module DelayedResque
-  class DelayProxy < ActiveSupport::BasicObject
+  class DelayProxy < ActiveSupport::ProxyObject
     def initialize(payload_class, target, options)
       @payload_class = payload_class
       @target = target
