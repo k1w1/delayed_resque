@@ -2,6 +2,8 @@ require 'active_support'
 
 module DelayedResque
   class DelayProxy < ActiveSupport::ProxyObject
+    TRACKED_QUEUE_NAME = "trackedTasks"
+    TRACKED_QUEUE_KEY = "tracked_task_key"
     def initialize(payload_class, target, options)
       @payload_class = payload_class
       @target = target
@@ -20,7 +22,12 @@ module DelayedResque
           ::Resque.dequeue(@payload_class, stored_options)
         end
       end
-      
+
+      if @options[:tracked].present?
+        ::Resque.redis.sadd(TRACKED_QUEUE_NAME, @options[:tracked])
+        stored_options[TRACKED_QUEUE_KEY] = @options[:tracked]
+      end
+
       ::Rails.logger.warn("Queuing for RESQUE: #{stored_options['method']}: #{stored_options.inspect}")
       
       if @options[:at]
