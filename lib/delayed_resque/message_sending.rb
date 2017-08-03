@@ -10,6 +10,14 @@ module DelayedResque
       @options = {:queue => "default"}.update(options)
     end
 
+    def self.is_tracked?(key)
+      ::Resque.redis.sismember(TRACKED_QUEUE_NAME, key)
+    end
+
+    def self.track_key(key)
+      ::Resque.redis.sadd(TRACKED_QUEUE_NAME, key)
+    end
+
     def method_missing(method, *args)
       queue = @options[:queue] || @payload_class.queue
       performable = @payload_class.new(@target, method.to_sym, @options, args)
@@ -24,7 +32,7 @@ module DelayedResque
       end
 
       if @options[:tracked].present?
-        ::Resque.redis.sadd(TRACKED_QUEUE_NAME, @options[:tracked])
+        DelayedResque::DelayProxy.track_key(@options[:tracked])
         stored_options[TRACKED_QUEUE_KEY] = @options[:tracked]
       end
 
