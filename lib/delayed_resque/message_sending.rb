@@ -32,7 +32,7 @@ module DelayedResque
       end
 
       if @options[:tracked].present?
-        DelayedResque::DelayProxy.track_key(@options[:tracked])
+        ::DelayedResque::DelayProxy.track_key(@options[:tracked])
         stored_options[TRACKED_QUEUE_KEY] = @options[:tracked]
       end
 
