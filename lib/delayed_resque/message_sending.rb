@@ -19,12 +19,12 @@ module DelayedResque
     end
 
     def self.untrack_task(key)
-      Resque.redis.srem(TRACKED_QUEUE_NAME, key)
+      ::Resque.redis.srem(TRACKED_QUEUE_NAME, key)
     end
 
     def self.args_tracking_key(args)
       args_hash = Array(args).first
-      args_hash[TRACKED_QUEUE_KEY].presence if args_hash.is_a?(Hash)
+      args_hash[TRACKED_QUEUE_KEY].presence if args_hash.is_a?(::Hash)
     end
 
     def method_missing(method, *args)
