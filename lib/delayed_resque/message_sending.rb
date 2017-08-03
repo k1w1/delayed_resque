@@ -10,19 +10,28 @@ module DelayedResque
       @options = {:queue => "default"}.update(options)
     end
 
-    def self.is_tracked?(key)
+    def self.tracked_task?(key)
       ::Resque.redis.sismember(TRACKED_QUEUE_NAME, key)
     end
 
-    def self.track_key(key)
+    def self.track_task(key)
       ::Resque.redis.sadd(TRACKED_QUEUE_NAME, key)
+    end
+
+    def self.untrack_task(key)
+      Resque.redis.srem(TRACKED_QUEUE_NAME, key)
+    end
+
+    def self.args_tracking_key(args)
+      args_hash = Array(args).first
+      args_hash[TRACKED_QUEUE_KEY].presence if args_hash.is_a?(Hash)
     end
 
     def method_missing(method, *args)
       queue = @options[:queue] || @payload_class.queue
       performable = @payload_class.new(@target, method.to_sym, @options, args)
       stored_options = performable.store
-      
+
       if @options[:unique]
         if @options[:at] or @options[:in]
           ::Resque.remove_delayed(@payload_class, stored_options)
@@ -32,14 +41,14 @@ module DelayedResque
       end
 
       if @options[:tracked].present?
-        ::DelayedResque::DelayProxy.track_key(@options[:tracked])
+        ::DelayedResque::DelayProxy.track_task(@options[:tracked])
         stored_options[TRACKED_QUEUE_KEY] = @options[:tracked]
       end
 
       ::Rails.logger.warn("Queuing for RESQUE: #{stored_options['method']}: #{stored_options.inspect}")
-      
+
       if @options[:at]
-        ::Resque.enqueue_at(@options[:at], @payload_class, stored_options) 
+        ::Resque.enqueue_at(@options[:at], @payload_class, stored_options)
       elsif @options[:in]
         ::Resque.enqueue_in(@options[:in], @payload_class, stored_options)
       else
@@ -47,8 +56,8 @@ module DelayedResque
       end
     end
   end
-  
-  
+
+
   module MessageSending
     def delay(options = {})
       DelayProxy.new(PerformableMethod, self, options)

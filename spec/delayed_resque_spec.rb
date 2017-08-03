@@ -85,7 +85,7 @@ describe DelayedResque do
 
     it "adds tracking key to redis" do
       DummyObject.delay(tracked: "4").first_method(123)
-      DelayedResque::DelayProxy.is_tracked?("4").should eq(true)
+      DelayedResque::DelayProxy.tracked_task?("4").should eq(true)
     end
 
   end
