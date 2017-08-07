@@ -32,17 +32,17 @@ module DelayedResque
       performable = @payload_class.new(@target, method.to_sym, @options, args)
       stored_options = performable.store
 
+      if @options[:tracked].present?
+        ::DelayedResque::DelayProxy.track_task(@options[:tracked])
+        stored_options[TRACKED_QUEUE_KEY] = @options[:tracked]
+      end
+
       if @options[:unique]
-        if @options[:at] or @options[:in]
+        if @options[:at] || @options[:in]
           ::Resque.remove_delayed(@payload_class, stored_options)
         else
           ::Resque.dequeue(@payload_class, stored_options)
         end
-      end
-
-      if @options[:tracked].present?
-        ::DelayedResque::DelayProxy.track_task(@options[:tracked])
-        stored_options[TRACKED_QUEUE_KEY] = @options[:tracked]
       end
 
       ::Rails.logger.warn("Queuing for RESQUE: #{stored_options['method']}: #{stored_options.inspect}")
