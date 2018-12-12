@@ -48,9 +48,9 @@ module DelayedResque
       ::Rails.logger.warn("Queuing for RESQUE: #{stored_options['method']}: #{stored_options.inspect}")
 
       if @options[:at]
-        ::Resque.enqueue_at(@options[:at], @payload_class, stored_options)
+        ::Resque.enqueue_at_with_queue(queue, @options[:at], @payload_class, stored_options)
       elsif @options[:in]
-        ::Resque.enqueue_in(@options[:in], @payload_class, stored_options)
+        ::Resque.enqueue_in_with_queue(queue, @options[:in], @payload_class, stored_options)
       else
         ::Resque.enqueue_to(queue, @payload_class, stored_options)
       end
