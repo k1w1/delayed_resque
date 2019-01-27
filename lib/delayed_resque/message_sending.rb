@@ -1,3 +1,4 @@
+require 'rails'
 require 'active_support'
 
 module DelayedResque
