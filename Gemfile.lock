@@ -1,7 +1,6 @@
 GIT
-  remote: git@github.com:justinweiss/resque_spec.git
-  revision: f158e90ede5f1b3721d06cdb2218fae251187074
-  branch: support-resque-delayed
+  remote: git@github.com:k1w1/resque_spec.git
+  revision: 380e4b5e1dc4503997b05fff734296dae316b975
   specs:
     resque_spec (0.12.7)
       resque (>= 1.19.0)

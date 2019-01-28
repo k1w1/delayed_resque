@@ -7,6 +7,6 @@ gem 'rails', '>= 4.0.0'
 group :test do
   gem 'rspec'
   gem 'rspec-rails'
-  gem 'resque_spec', :git => "git@github.com:justinweiss/resque_spec.git", :branch => "support-resque-delayed"
+  gem 'resque_spec', :git => "git@github.com:k1w1/resque_spec.git"
   gem 'sqlite3'
 end
