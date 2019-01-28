@@ -45,7 +45,7 @@ module DelayedResque
 
     def store
       hsh = {"obj" => @object, "method" => @method, "args" => @args}.merge(@options[:params] || {})
-      unless @options[:unique] || @options[:at] || @options[:in]
+      unless @options[:unique] || @options[:throttle] || @options[:at] || @options[:in]
         hsh["t"] = Time.now.to_f
       end
       hsh

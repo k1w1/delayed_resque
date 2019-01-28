@@ -136,4 +136,28 @@ describe DelayedResque do
       DelayedResque::PerformableMethod.should have_schedule_size_of(1)
     end
   end
+
+  context "throttled jobs" do
+    it "will schedule a job" do
+      travel_to Time.current do
+        DummyObject.delay(:at => 5.seconds.from_now, :throttle => true).first_method(123)
+        DelayedResque::PerformableMethod.should have_scheduled("obj" => "CLASS:DummyObject", "method" => :first_method, "args" => [123])
+        DelayedResque::PerformableMethod.should have_schedule_size_of(1)
+      end
+    end
+
+    it "will not schedule a job if one is already scheduled" do
+      travel_to Time.current do
+        DummyObject.delay(:at => 5.minutes.from_now, :throttle => true).first_method(123)
+        DelayedResque::PerformableMethod.should have_scheduled("obj" => "CLASS:DummyObject", "method" => :first_method, "args" => [123])
+        DelayedResque::PerformableMethod.should have_schedule_size_of(1)
+      end
+
+      travel_to 1.minute.from_now do
+        DummyObject.delay(:at => 5.minutes.from_now, :throttle => true).first_method(123)
+        DelayedResque::PerformableMethod.should have_scheduled("obj" => "CLASS:DummyObject", "method" => :first_method, "args" => [123])
+        DelayedResque::PerformableMethod.should have_schedule_size_of(1)
+      end
+    end
+  end
 end

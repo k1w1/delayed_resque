@@ -1,7 +1,7 @@
 $LOAD_PATH.unshift(File.dirname(__FILE__))
 $LOAD_PATH.unshift(File.join(File.dirname(__FILE__), '..', 'lib'))
 require 'rspec'
-require 'resque_scheduler'
+require 'resque-scheduler'
 require 'resque_spec'
 require 'resque_spec/scheduler'
 require 'active_support/testing/time_helpers'

@@ -1,12 +1,12 @@
 source :rubygems
 
 gem 'resque'
-gem 'resque-scheduler'
+gem 'resque-scheduler', '>= 3.0.0'
 gem 'rails', '>= 4.0.0'
 
 group :test do
   gem 'rspec'
   gem 'rspec-rails'
-  gem 'resque_spec', :git => "git@github.com:justinweiss/resque_spec.git", :branch => "enqueue-at-with-queue-uses-scheduled-queue"
+  gem 'resque_spec', :git => "git@github.com:justinweiss/resque_spec.git", :branch => "support-resque-delayed"
   gem 'sqlite3'
 end
