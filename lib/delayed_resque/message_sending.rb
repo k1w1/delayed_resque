@@ -1,3 +1,4 @@
+require 'rails'
 require 'active_support'
 
 module DelayedResque
@@ -42,6 +43,20 @@ module DelayedResque
           ::Resque.remove_delayed(@payload_class, stored_options)
         else
           ::Resque.dequeue(@payload_class, stored_options)
+        end
+      elsif @options[:throttle]
+        if @options[:at] || @options[:in]
+          # This isn't perfect -- if a job is removed from the queue
+          # but it takes a while to process it, we may have two jobs
+          # scheduled N minutes apart, but actually run < N minutes
+          # apart.
+          return if ::Resque.delayed?(@payload_class, stored_options)
+        else
+          # Resque doesn't have a way to find a scheduled job, unless
+          # you're deleting it. That's not what we want, because it
+          # would have the same behavior as :unique -- just use that,
+          # instead.
+          ::Rails.logger.warn("Trying to throttle a non-scheduled job, which is unsupported.")
         end
       end
 

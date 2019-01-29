@@ -15,8 +15,10 @@ describe DelayedResque do
 
   context "class methods can be delayed" do
     it "can delay method" do
-      DummyObject.delay.first_method(123)
-      DelayedResque::PerformableMethod.should have_queued({"obj"=>"CLASS:DummyObject", "method"=>:first_method, "args"=>[123]}).in(:default)
+      travel_to Time.current do
+        DummyObject.delay.first_method(123)
+        DelayedResque::PerformableMethod.should have_queued({"obj"=>"CLASS:DummyObject", "method"=>:first_method, "args"=>[123], "t" => Time.current.to_f}).in(:default)
+      end
     end
 
     it "delayed method is called" do
@@ -33,8 +35,10 @@ describe DelayedResque do
     end
 
     it "can pass additional params" do
-      DummyObject.delay(:params => {"k" => "v"}).first_method(123)
-      DelayedResque::PerformableMethod.should have_queued({"obj"=>"CLASS:DummyObject", "method"=>:first_method, "args"=>[123], "k" => "v"}).in(:default)
+      travel_to Time.current do
+        DummyObject.delay(:params => {"k" => "v"}).first_method(123)
+        DelayedResque::PerformableMethod.should have_queued({"obj"=>"CLASS:DummyObject", "method"=>:first_method, "args"=>[123], "k" => "v", "t" => Time.current.to_f}).in(:default)
+      end
     end
 
   end
@@ -79,8 +83,10 @@ describe DelayedResque do
 
   context "tasks can be tracked" do
     it "adds tracking params tasks" do
-      DummyObject.delay(tracked: "4").first_method(123)
-      DelayedResque::PerformableMethod.should have_queued({"obj"=>"CLASS:DummyObject", "method"=>:first_method, "args"=>[123], "tracked_task_key"=> "4"}).in(:default)
+      travel_to Time.current do
+        DummyObject.delay(tracked: "4").first_method(123)
+        DelayedResque::PerformableMethod.should have_queued({"obj"=>"CLASS:DummyObject", "method"=>:first_method, "args"=>[123], "tracked_task_key"=> "4", "t" => Time.current.to_f}).in(:default)
+      end
     end
 
     it "adds tracking key to redis" do
@@ -92,8 +98,10 @@ describe DelayedResque do
 
   context "methods can be delayed for an interval" do
     it "can delay method" do
-      DummyObject.delay(:in => 5.minutes).first_method(123)
-      DelayedResque::PerformableMethod.should have_scheduled({"obj"=>"CLASS:DummyObject", "method"=>:first_method, "args"=>[123]}).in(5 * 60)
+      travel_to Time.current do
+        DummyObject.delay(:in => 5.minutes).first_method(123)
+        DelayedResque::PerformableMethod.should have_scheduled({"obj"=>"CLASS:DummyObject", "method"=>:first_method, "args"=>[123]}).in(5 * 60)
+      end
     end
 
     it "can run at specific time" do
@@ -105,14 +113,16 @@ describe DelayedResque do
   end
 
   context "unique jobs" do
-    it "can remove preceeding jobs" do
-      DummyObject.delay.first_method(123)
-      DelayedResque::PerformableMethod.should have_queued({"obj"=>"CLASS:DummyObject", "method"=>:first_method, "args"=>[123]})
-      DelayedResque::PerformableMethod.should have_queue_size_of(1)
-      DummyObject.delay.first_method(124)
-      DelayedResque::PerformableMethod.should have_queue_size_of(2)
-      DummyObject.delay(:unique => true).first_method(123)
-      DelayedResque::PerformableMethod.should have_queue_size_of(2)
+    it "can remove preceeding unique jobs" do
+      travel_to Time.current do
+        DummyObject.delay(:unique => true).first_method(123)
+        DelayedResque::PerformableMethod.should have_queued({"obj"=>"CLASS:DummyObject", "method"=>:first_method, "args"=>[123]})
+        DelayedResque::PerformableMethod.should have_queue_size_of(1)
+        DummyObject.delay.first_method(124)
+        DelayedResque::PerformableMethod.should have_queue_size_of(2)
+        DummyObject.delay(:unique => true).first_method(123)
+        DelayedResque::PerformableMethod.should have_queue_size_of(2)
+      end
     end
 
     it "can remove preceeding delayed jobs" do
@@ -124,6 +134,30 @@ describe DelayedResque do
       DelayedResque::PerformableMethod.should have_schedule_size_of(2)
       DummyObject.delay(:at => at_time + 2, :unique => true).first_method(123)
       DelayedResque::PerformableMethod.should have_schedule_size_of(1)
+    end
+  end
+
+  context "throttled jobs" do
+    it "will schedule a job" do
+      travel_to Time.current do
+        DummyObject.delay(:at => 5.seconds.from_now, :throttle => true).first_method(123)
+        DelayedResque::PerformableMethod.should have_scheduled("obj" => "CLASS:DummyObject", "method" => :first_method, "args" => [123])
+        DelayedResque::PerformableMethod.should have_schedule_size_of(1)
+      end
+    end
+
+    it "will not schedule a job if one is already scheduled" do
+      travel_to Time.current do
+        DummyObject.delay(:at => 5.minutes.from_now, :throttle => true).first_method(123)
+        DelayedResque::PerformableMethod.should have_scheduled("obj" => "CLASS:DummyObject", "method" => :first_method, "args" => [123])
+        DelayedResque::PerformableMethod.should have_schedule_size_of(1)
+      end
+
+      travel_to 1.minute.from_now do
+        DummyObject.delay(:at => 5.minutes.from_now, :throttle => true).first_method(123)
+        DelayedResque::PerformableMethod.should have_scheduled("obj" => "CLASS:DummyObject", "method" => :first_method, "args" => [123])
+        DelayedResque::PerformableMethod.should have_schedule_size_of(1)
+      end
     end
   end
 end
