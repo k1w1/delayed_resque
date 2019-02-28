@@ -31,52 +31,54 @@ module DelayedResque
 
     def method_missing(method, *args)
       queue = @options[:queue] || @payload_class.queue
-      performable = @payload_class.new(@target, method.to_sym, @options, args)
-      stored_options = performable.store
+      @payload_class.with_queue(queue) do
+        performable = @payload_class.new(@target, method.to_sym, @options, args)
+        stored_options = performable.store
 
-      if @options[:unique]
-        if @options[:at] || @options[:in]
-          ::Resque.remove_delayed(@payload_class, stored_options)
+        if @options[:unique]
+          if @options[:at] || @options[:in]
+            ::Resque.remove_delayed(@payload_class, stored_options)
+          else
+            ::Resque.dequeue(@payload_class, stored_options)
+          end
+        elsif @options[:throttle]
+          if @options[:at] || @options[:in]
+            # This isn't perfect -- if a job is removed from the queue
+            # but it takes a while to process it, we may have two jobs
+            # scheduled N minutes apart, but actually run < N minutes
+            # apart.
+            return if ::Resque.delayed?(@payload_class, stored_options)
+          else
+            # Resque doesn't have a way to find a scheduled job, unless
+            # you're deleting it. That's not what we want, because it
+            # would have the same behavior as :unique -- just use that,
+            # instead.
+            ::Rails.logger.warn("Trying to throttle a non-scheduled job, which is unsupported.")
+          end
         else
-          ::Resque.dequeue(@payload_class, stored_options)
+          # Ensure that the meta data is specific to the job.
+          stored_options["unique_meta_id"] = ::SecureRandom.uuid
         end
-      elsif @options[:throttle]
-        if @options[:at] || @options[:in]
-          # This isn't perfect -- if a job is removed from the queue
-          # but it takes a while to process it, we may have two jobs
-          # scheduled N minutes apart, but actually run < N minutes
-          # apart.
-          return if ::Resque.delayed?(@payload_class, stored_options)
+
+        if @options[:tracked].present?
+          ::DelayedResque::DelayProxy.track_task(@options[:tracked])
+          stored_options[TRACKED_QUEUE_KEY] = @options[:tracked]
+        end
+
+        if @options[:meta].present?
+          meta = @options.delete(:meta)
+          ::DelayedResque::MetaData.store_meta_data(@payload_class, stored_options, meta)
+        end
+
+        ::Rails.logger.warn("Queuing for RESQUE: #{stored_options['method']}: #{stored_options.inspect}")
+
+        if @options[:at]
+          ::Resque.enqueue_at_with_queue(queue, @options[:at], @payload_class, stored_options)
+        elsif @options[:in]
+          ::Resque.enqueue_in_with_queue(queue, @options[:in], @payload_class, stored_options)
         else
-          # Resque doesn't have a way to find a scheduled job, unless
-          # you're deleting it. That's not what we want, because it
-          # would have the same behavior as :unique -- just use that,
-          # instead.
-          ::Rails.logger.warn("Trying to throttle a non-scheduled job, which is unsupported.")
+          ::Resque.enqueue_to(queue, @payload_class, stored_options)
         end
-      else
-        # Ensure that the meta data is specific to the job.
-        stored_options["unique_meta_id"] = ::SecureRandom.uuid
-      end
-
-      if @options[:tracked].present?
-        ::DelayedResque::DelayProxy.track_task(@options[:tracked])
-        stored_options[TRACKED_QUEUE_KEY] = @options[:tracked]
-      end
-
-      if @options[:meta].present?
-        meta = @options.delete(:meta)
-        ::DelayedResque::MetaData.store_meta_data(@payload_class, stored_options, meta)
-      end
-
-      ::Rails.logger.warn("Queuing for RESQUE: #{stored_options['method']}: #{stored_options.inspect}")
-
-      if @options[:at]
-        ::Resque.enqueue_at_with_queue(queue, @options[:at], @payload_class, stored_options)
-      elsif @options[:in]
-        ::Resque.enqueue_in_with_queue(queue, @options[:in], @payload_class, stored_options)
-      else
-        ::Resque.enqueue_to(queue, @payload_class, stored_options)
       end
     end
   end

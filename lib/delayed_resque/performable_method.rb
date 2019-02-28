@@ -23,9 +23,16 @@ module DelayedResque
     end
 
     def self.queue
-      "default"
+      @queue || "default"
     end
-    
+        
+    def self.with_queue(queue)
+      old_queue = @queue
+      @queue = queue
+      yield
+      @queue = old_queue
+    end
+
     def self.perform(options)
       object = options["obj"]
       method = options["method"]
