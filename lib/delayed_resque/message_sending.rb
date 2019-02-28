@@ -1,5 +1,6 @@
 require 'rails'
 require 'active_support'
+require 'securerandom'
 
 module DelayedResque
   class DelayProxy < ActiveSupport::ProxyObject
@@ -33,11 +34,6 @@ module DelayedResque
       performable = @payload_class.new(@target, method.to_sym, @options, args)
       stored_options = performable.store
 
-      if @options[:tracked].present?
-        ::DelayedResque::DelayProxy.track_task(@options[:tracked])
-        stored_options[TRACKED_QUEUE_KEY] = @options[:tracked]
-      end
-
       if @options[:unique]
         if @options[:at] || @options[:in]
           ::Resque.remove_delayed(@payload_class, stored_options)
@@ -58,6 +54,19 @@ module DelayedResque
           # instead.
           ::Rails.logger.warn("Trying to throttle a non-scheduled job, which is unsupported.")
         end
+      else
+        # Ensure that the meta data is specific to the job.
+        stored_options["unique_meta_id"] = ::SecureRandom.uuid
+      end
+
+      if @options[:tracked].present?
+        ::DelayedResque::DelayProxy.track_task(@options[:tracked])
+        stored_options[TRACKED_QUEUE_KEY] = @options[:tracked]
+      end
+
+      if @options[:meta].present?
+        meta = @options.delete(:meta)
+        ::DelayedResque::MetaData.store_meta_data(@payload_class, stored_options, meta)
       end
 
       ::Rails.logger.warn("Queuing for RESQUE: #{stored_options['method']}: #{stored_options.inspect}")

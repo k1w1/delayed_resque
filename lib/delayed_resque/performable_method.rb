@@ -43,12 +43,24 @@ module DelayedResque
       loaded_object.send(method, *arg_objects)
     end
 
-    def store
-      hsh = {"obj" => @object, "method" => @method, "args" => @args}.merge(@options[:params] || {})
-      unless @options[:unique] || @options[:throttle] || @options[:at] || @options[:in]
-        hsh["t"] = Time.now.to_f
+    def self.before_perform_remove_tracked_jobs(args)
+      if task_key = DelayedResque::DelayProxy.args_tracking_key(args)
+        # tracked jobs need to re-queue themselves
+        DelayedResque::DelayProxy.untrack_task(task_key)
       end
-      hsh
+    end
+
+    def self.after_perform_remove_meta_data(args)
+      ::DelayedResque::MetaData.delete_meta_data(self, args)
+    end
+
+    def self.on_failure_remove_keys(e, args)
+      after_perform_remove_meta_data(args)
+      before_perform_remove_tracked_jobs(args)
+    end
+
+    def store
+      {"obj" => @object, "method" => @method, "args" => @args}.merge(@options[:params] || {})
     end
 
     private
