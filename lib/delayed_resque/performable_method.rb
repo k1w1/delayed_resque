@@ -30,6 +30,7 @@ module DelayedResque
       old_queue = @queue
       @queue = queue
       yield
+    ensure
       @queue = old_queue
     end
 
