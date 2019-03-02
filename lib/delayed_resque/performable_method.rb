@@ -1,9 +1,11 @@
 require 'active_record'
 
 module DelayedResque
-  class PerformableMethod < Struct.new(:object, :method, :args)
+  class PerformableMethod
     CLASS_STRING_FORMAT = /^CLASS\:([A-Z][\w\:]+)$/
     AR_STRING_FORMAT = /^AR\:([A-Z][\w\:]+)\:(\d+)$/
+
+    attr_reader :object, :method, :args
 
     def initialize(object, method, options, args)
       raise NoMethodError, "undefined method `#{method}' for #{object.inspect}" unless object.respond_to?(method)
@@ -51,7 +53,7 @@ module DelayedResque
       loaded_object.send(method, *arg_objects)
     end
 
-    def self.before_perform_remove_tracked_jobs(args)
+    def self.before_perform_remove_tracked_jobs(*args)
       if task_key = DelayedResque::DelayProxy.args_tracking_key(args)
         # tracked jobs need to re-queue themselves
         DelayedResque::DelayProxy.untrack_task(task_key)
@@ -64,7 +66,6 @@ module DelayedResque
 
     def self.on_failure_remove_keys(e, args)
       after_perform_remove_meta_data(args)
-      before_perform_remove_tracked_jobs(args)
     end
 
     def store
