@@ -55,8 +55,13 @@ module DelayedResque
             # instead.
             ::Rails.logger.warn("Trying to throttle a non-scheduled job, which is unsupported.")
           end
-        else
-          # Ensure that the meta data is specific to the job.
+        end
+
+        unless @options[:unique]
+          # Ensure that the meta data is specific to the job. Since multiple
+          # jobs might appear in the queue with the same options, we need
+          # to add a unique aspect to the options so only one instance of the
+          # meta data matches.
           stored_options["unique_meta_id"] = ::SecureRandom.uuid
         end
 
