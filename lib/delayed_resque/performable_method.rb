@@ -69,7 +69,11 @@ module DelayedResque
     end
 
     def store
-      {"obj" => @object, "method" => @method, "args" => @args}.merge(@options[:params] || {})
+      hsh = {"obj" => @object, "method" => @method, "args" => @args}.merge(@options[:params] || {})	      
+      unless @options[:unique] || @options[:throttle] || @options[:at] || @options[:in]	        # tracked jobs need to re-queue themselves
+        hsh["t"] = Time.now.to_f
+      end
+      hsh
     end
 
     private
