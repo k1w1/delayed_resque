@@ -1,7 +1,7 @@
 module DelayedResque
   class MetaData
     def self.store_meta_data(klass, args, meta = {})
-      Resque.redis.set(key(klass, args), Resque.encode(meta))
+      Resque.redis.set(key(klass, args), Resque.encode(meta), ex: 30.days.to_i)
     end
 
     def self.load_meta_data(klass, args)
