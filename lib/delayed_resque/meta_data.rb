@@ -5,7 +5,7 @@ module DelayedResque
     end
 
     def self.load_meta_data(klass, args)
-      val = Resque.decode(Resque.redis.get(key(klass, args))) || {}
+      val = Resque.decode(Resque.redis.get(key(klass, args)))
       Rails.logger.debug("Loaded data #{key(klass, args).inspect} #{val.inspect}")
       val
     end
