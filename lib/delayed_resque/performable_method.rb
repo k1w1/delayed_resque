@@ -1,9 +1,11 @@
 require 'active_record'
 
 module DelayedResque
-  class PerformableMethod < Struct.new(:object, :method, :args)
+  class PerformableMethod
     CLASS_STRING_FORMAT = /^CLASS\:([A-Z][\w\:]+)$/
     AR_STRING_FORMAT = /^AR\:([A-Z][\w\:]+)\:(\d+)$/
+
+    attr_reader :object, :method, :args
 
     def initialize(object, method, options, args)
       raise NoMethodError, "undefined method `#{method}' for #{object.inspect}" unless object.respond_to?(method)
@@ -23,9 +25,17 @@ module DelayedResque
     end
 
     def self.queue
-      "default"
+      @queue || "default"
     end
-    
+        
+    def self.with_queue(queue)
+      old_queue = @queue
+      @queue = queue
+      yield
+    ensure
+      @queue = old_queue
+    end
+
     def self.perform(options)
       object = options["obj"]
       method = options["method"]
@@ -43,9 +53,24 @@ module DelayedResque
       loaded_object.send(method, *arg_objects)
     end
 
+    def self.before_perform_remove_tracked_jobs(*args)
+      if task_key = DelayedResque::DelayProxy.args_tracking_key(args)
+        # tracked jobs need to re-queue themselves
+        DelayedResque::DelayProxy.untrack_task(task_key)
+      end
+    end
+
+    def self.after_perform_remove_meta_data(args)
+      ::DelayedResque::MetaData.delete_meta_data(self, args)
+    end
+
+    def self.on_failure_remove_keys(e, args)
+      after_perform_remove_meta_data(args)
+    end
+
     def store
-      hsh = {"obj" => @object, "method" => @method, "args" => @args}.merge(@options[:params] || {})
-      unless @options[:unique] || @options[:throttle] || @options[:at] || @options[:in]
+      hsh = {"obj" => @object, "method" => @method, "args" => @args}.merge(@options[:params] || {})	      
+      unless @options[:unique] || @options[:throttle] || @options[:at] || @options[:in]	        # tracked jobs need to re-queue themselves
         hsh["t"] = Time.now.to_f
       end
       hsh
