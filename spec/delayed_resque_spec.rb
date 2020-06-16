@@ -135,6 +135,15 @@ describe DelayedResque do
       DummyObject.delay(:at => at_time + 2, :unique => true).first_method(123)
       DelayedResque::PerformableMethod.should have_schedule_size_of(1)
     end
+
+    it "can remove preceeding delayed jobs with a non-default queue" do
+      at_time = Time.now.utc + 10.minutes
+      DummyObject.delay(at: at_time, unique: true, queue: :send_audit).first_method(123)
+      DelayedResque::PerformableMethod.should have_scheduled({"obj"=>"CLASS:DummyObject", "method"=>:first_method, "args"=>[123]}).at(at_time).queue(:send_audit)
+      DelayedResque::PerformableMethod.should have_schedule_size_of(1).queue(:send_audit)
+      DummyObject.delay(at: at_time + 1, unique: true, queue: :send_audit).first_method(123)
+      DelayedResque::PerformableMethod.should have_schedule_size_of(1).queue(:send_audit)
+    end
   end
 
   context "throttled jobs" do
