@@ -39,10 +39,16 @@ module DelayedResque
       end
 
       if @options[:unique]
-        if @options[:at] || @options[:in]
-          ::Resque.remove_delayed(@payload_class, stored_options)
-        else
-          ::Resque.dequeue(@payload_class, stored_options)
+        # remove_delayed uses @payload_class.queue rather than the queue
+        # value within stored_options to determine whether or not a job
+        # already exists. This can lead to issues when trying to remove
+        # duplicates in a non-default queue
+        @payload_class.with_queue(queue) do
+          if @options[:at] || @options[:in]
+            ::Resque.remove_delayed(@payload_class, stored_options)
+          else
+            ::Resque.dequeue(@payload_class, stored_options)
+          end
         end
       elsif @options[:throttle]
         if @options[:at] || @options[:in]
