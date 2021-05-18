@@ -121,8 +121,12 @@ describe DelayedResque do
       end
     end
 
-    before { SecureRandom.stub(:uuid).and_return(*uuids) }
-    let(:uuids) { Array.new(10) { SecureRandom.uuid } }
+    let(:uuids) { Array.new(5) { SecureRandom.uuid } }
+
+    before do
+      uuids
+      SecureRandom.stub(:uuid).and_return(*uuids)
+    end
 
     it 'enqueues non-scheduled unique jobs, keeping track of the last' do
       stored_args = {
@@ -132,38 +136,43 @@ describe DelayedResque do
         'job_uuid' => uuids.first
       }
 
-      expect(DelayedResque.last_unique_job(stored_args)).to be_nil
+      expect(DelayedResque::DelayProxy.last_unique_job(stored_args)).to be_nil
 
       DummyObject.delay(unique: true).first_method(123)
 
-      expect(DelayedResque::DelayedProxy.last_unique_job(stored_args)).to eq(uuids.first)
+      expect(DelayedResque::DelayProxy.last_unique_job(stored_args)).to eq(uuids.first)
       expect(DelayedResque::PerformableMethod).to have_queued(stored_args)
       expect(DelayedResque::PerformableMethod).to have_queue_size_of(1)
 
-      stored_args.merge!(
+      stored_args = {
+        'obj' => 'CLASS:DummyObject',
+        'method' => :first_method,
         'args' => [124],
-        'job_uuid' => uuids.second
-      )
-      expect(DelayedResque.last_unique_job(stored_args)).to be_nil
+        't' => Time.now.to_f
+      }
+
+      expect(DelayedResque::DelayProxy.last_unique_job(stored_args)).to be_nil
 
       DummyObject.delay.first_method(124)
 
-      expect(DelayedResque::DelayedProxy.last_unique_job(stored_args)).to be_nil
+      expect(DelayedResque::DelayProxy.last_unique_job(stored_args)).to be_nil
       expect(DelayedResque::PerformableMethod).to have_queued(stored_args)
       expect(DelayedResque::PerformableMethod).should have_queue_size_of(2)
 
-      stored_args.merge!(
+      stored_args = {
+        'obj' => 'CLASS:DummyObject',
+        'method' => :first_method,
         'args' => [123],
-        'job_uuid' => uuids.third
-      )
+        'job_uuid' => uuids.second
+      }
 
-      expect(DelayedResque.last_unique_job(stored_args)).to eq(uuids.first)
+      expect(DelayedResque::DelayProxy.last_unique_job(stored_args)).to eq(uuids.first)
 
       DummyObject.delay(unique: true).first_method(123)
 
-      expect(DelayedResque::DelayedProxy.last_unique_job(stored_args)).to eq(uuids.third)
       expect(DelayedResque::PerformableMethod).to have_queued(stored_args)
       expect(DelayedResque::PerformableMethod).to have_queue_size_of(3)
+      expect(DelayedResque::DelayProxy.last_unique_job(stored_args)).to eq(uuids.second)
     end
 
     it "can remove preceeding delayed jobs" do

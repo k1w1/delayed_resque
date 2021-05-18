@@ -5,6 +5,10 @@ module DelayedResque
   class DelayProxy < ActiveSupport::ProxyObject
     TRACKED_QUEUE_NAME = "trackedTasks"
     TRACKED_QUEUE_KEY = "tracked_task_key"
+
+    UNIQUE_JOBS_NAME = "unique_jobs"
+    UNIQUE_JOB_ID = "job_uuid"
+
     def initialize(payload_class, target, options)
       @payload_class = payload_class
       @target = target
@@ -28,6 +32,21 @@ module DelayedResque
       args_hash[TRACKED_QUEUE_KEY].presence if args_hash.is_a?(::Hash)
     end
 
+    def self.unique_job_key(job_options)
+      # Redis has a limit of 512MB on the key size
+      ::Resque.encode(job_options.except(UNIQUE_JOB_ID))
+    end
+
+    def self.last_unique_job(job_options)
+      ::Resque.redis.hget(UNIQUE_JOBS_NAME, unique_job_key(job_options))
+    end
+
+    def self.add_unique_job(job_options)
+      job_options[UNIQUE_JOB_ID] = ::SecureRandom.uuid
+      ::Resque.redis.hset(UNIQUE_JOBS_NAME, unique_job_key(job_options), job_options[UNIQUE_JOB_ID])
+      job_options[UNIQUE_JOB_ID]
+    end
+
     def method_missing(method, *args)
       queue = @options[:queue] || @payload_class.queue
       performable = @payload_class.new(@target, method.to_sym, @options, args)
@@ -47,7 +66,10 @@ module DelayedResque
           if @options[:at] || @options[:in]
             ::Resque.remove_delayed(@payload_class, stored_options)
           else
-            ::Resque.dequeue(@payload_class, stored_options)
+            # TODO: do we need to pass in the payload class here?
+            # How about the queue? (I suspect the answer to both is yes)
+            # Should this be in the same redis transaction as the RPUSH?
+            ::DelayedResque::DelayProxy.add_unique_job(stored_options)
           end
         end
       elsif @options[:throttle]
@@ -73,6 +95,7 @@ module DelayedResque
       elsif @options[:in]
         ::Resque.enqueue_in_with_queue(queue, @options[:in], @payload_class, stored_options)
       else
+        ::Kernel.puts "stored_options: #{stored_options.inspect}"
         ::Resque.enqueue_to(queue, @payload_class, stored_options)
       end
     end
