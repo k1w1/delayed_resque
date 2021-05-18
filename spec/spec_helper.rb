@@ -1,6 +1,7 @@
 $LOAD_PATH.unshift(File.dirname(__FILE__))
 $LOAD_PATH.unshift(File.join(File.dirname(__FILE__), '..', 'lib'))
 require 'rspec'
+require 'mock_redis'
 require 'resque-scheduler'
 require 'resque_spec'
 require 'resque_spec/scheduler'
@@ -20,4 +21,6 @@ ActiveRecord::Base.establish_connection(
 
 RSpec.configure do |config|
   config.include ActiveSupport::Testing::TimeHelpers
+
+  config.before { Resque.redis = MockRedis.new }
 end
