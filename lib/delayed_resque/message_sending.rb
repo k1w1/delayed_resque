@@ -32,19 +32,26 @@ module DelayedResque
       args_hash[TRACKED_QUEUE_KEY].presence if args_hash.is_a?(::Hash)
     end
 
+    # Returns an encoded string representing the job options that are used to
+    # determine uniqueness when a job is enqueued with unique: true
     def self.unique_job_key(job_options)
-      # Redis has a limit of 512MB on the key size
+      # FYI - Redis has a limit of 512MB on the key size.
       ::Resque.encode(job_options.except(UNIQUE_JOB_ID))
     end
 
-    def self.last_unique_job(job_options)
+    # The unique job id that was most recently enqueued for this set of job
+    # options
+    def self.last_unique_job_id(job_options)
       ::Resque.redis.hget(UNIQUE_JOBS_NAME, unique_job_key(job_options))
     end
 
-    def self.add_unique_job(job_options)
-      job_options[UNIQUE_JOB_ID] = ::SecureRandom.uuid
-      ::Resque.redis.hset(UNIQUE_JOBS_NAME, unique_job_key(job_options), job_options[UNIQUE_JOB_ID])
-      job_options[UNIQUE_JOB_ID]
+    # Returns a unique job id to be stored in the options on the enqueued job
+    def self.track_unique_job(job_options)
+      job_id = ::SecureRandom.uuid
+      # We only care about tracking the last unique job to be enqueued. The
+      # hset will overwrite any previous value for this job key
+      ::Resque.redis.hset(UNIQUE_JOBS_NAME, unique_job_key(job_options), job_id)
+      job_id
     end
 
     def method_missing(method, *args)
@@ -69,7 +76,7 @@ module DelayedResque
             # TODO: do we need to pass in the payload class here?
             # How about the queue? (I suspect the answer to both is yes)
             # Should this be in the same redis transaction as the RPUSH?
-            ::DelayedResque::DelayProxy.add_unique_job(stored_options)
+            stored_options[UNIQUE_JOB_ID] = ::DelayedResque::DelayProxy.track_unique_job(stored_options)
           end
         end
       elsif @options[:throttle]
@@ -95,7 +102,6 @@ module DelayedResque
       elsif @options[:in]
         ::Resque.enqueue_in_with_queue(queue, @options[:in], @payload_class, stored_options)
       else
-        ::Kernel.puts "stored_options: #{stored_options.inspect}"
         ::Resque.enqueue_to(queue, @payload_class, stored_options)
       end
     end
