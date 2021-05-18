@@ -33,7 +33,15 @@ module DelayedResque
     ensure
       @queue = old_queue
     end
-    
+
+    def self.around_perform_with_unique(options)
+      job_id = options[DelayedResque::DelayProxy::UNIQUE_JOB_ID]
+
+      if job_id.blank? || job_id == DelayedResque::DelayProxy.last_unique_job_id(options)
+        yield options
+      end
+    end
+
     def self.perform(options)
       object = options["obj"]
       method = options["method"]
