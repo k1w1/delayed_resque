@@ -16,48 +16,98 @@ RSpec.describe DelayedResque::PerformableMethod do
   end
 
   let(:redis) { ::Resque.redis }
-
-  describe "#store" do
-
+  let(:object) { 'CLASS:DummyObject' }
+  let(:method) { :do_something }
+  let(:method_args) { [123] }
+  let(:base_job_options) do
+    {
+      'obj' => object,
+      'method' => method,
+      'args' => method_args
+    }
   end
+  let(:additional_job_options) { {} }
+  let(:options) { base_job_options.merge(additional_job_options) }
 
-  describe ".perform" do
-    subject(:perform) do
-      perform_job(described_class, base_job_options.merge(additional_job_options))
+  describe '#store' do
+    subject(:store) do
+      described_class.new(DummyObject, method, options, method_args).store
     end
 
-    let(:object) { 'CLASS:DummyObject' }
-    let(:method) { 'do_something' }
-    let(:method_args) { [123] }
-    let(:base_job_options) do
-      {
-        "obj" => object,
-        "method" => method,
-        "args" => method_args
-      }
+    it 'has the correct obj' do
+      expect(store).to include('obj' => object)
     end
-    let(:additional_job_options) { {} }
 
-    context "when job is not unique" do
+    it 'has the correct method' do
+      expect(store).to include('method' => method)
+    end
+
+    it 'has the correct args' do
+      expect(store).to include('args' => method_args)
+    end
+
+    context 'when job options include params' do
       let(:additional_job_options) do
-        { "t" => Time.now.to_f }
+        { params: { a: 1, b: 2 } }
       end
 
-      it "executes the method" do
+      it 'includes params' do
+        expect(store).to include(a: 1, b: 2)
+      end
+    end
+
+    context 'when job options include unique' do
+      let(:additional_job_options) { { unique: true } }
+
+      it 'does not include the timestamp' do
+        expect(store).to_not have_key('t')
+      end
+    end
+
+    context 'when job options include thottle' do
+      let(:additional_job_options) { { throttle: true } }
+
+      it 'does not include the timestamp' do
+        expect(store).to_not have_key('t')
+      end
+    end
+
+    context 'when job options include at' do
+      let(:additional_job_options) { { at: 10.minutes.from_now } }
+
+      it 'does not include the timestamp' do
+        expect(store).to_not have_key('t')
+      end
+    end
+
+    context 'when job options include in' do
+      let(:additional_job_options) { { in: 1.minute } }
+
+      it 'does not include the timestamp' do
+        expect(store).to_not have_key('t')
+      end
+    end
+  end
+
+  describe '.perform' do
+    subject(:perform) { perform_job(described_class, options) }
+
+    context 'when job is not unique' do
+      let(:additional_job_options) { { 't' => Time.now.to_f } }
+
+      it 'executes the method' do
         DummyObject.should_receive(:do_something).with(*method_args).once
         perform
       end
     end
 
-    context "when job has unique identifier" do
-      let(:additional_job_options) do
-        { "job_uuid" => uuid }
-      end
+    context 'when job has unique identifier' do
+      let(:additional_job_options) { { DelayedResque::DelayProxy::UNIQUE_JOB_ID => uuid } }
 
       let(:uuid) { ::SecureRandom.uuid }
       let(:other_uuid) { ::SecureRandom.uuid }
 
-      context "when there is a unique job id being tracked" do
+      context 'when there is a unique job id being tracked' do
         before do
           redis.hset(
             DelayedResque::DelayProxy::UNIQUE_JOBS_NAME,
@@ -66,30 +116,30 @@ RSpec.describe DelayedResque::PerformableMethod do
           )
         end
 
-        context "when this job is the last unique job" do
+        context 'when this job is the last unique job' do
           let(:tracked_uuid) { uuid }
 
-          it "executes the method" do
+          it 'executes the method' do
             DummyObject.should_receive(:do_something).with(*method_args).once
             perform
           end
         end
 
-        context "when this job is not the last unique job" do
+        context 'when this job is not the last unique job' do
           let(:tracked_uuid) { other_uuid }
 
-          it "does not execute the method" do
+          it 'does not execute the method' do
             DummyObject.should_not_receive(:do_something)
             perform
           end
         end
       end
 
-      context "when there is not a unique job id being tracked" do
+      context 'when there is not a unique job id being tracked' do
         # We should never end up here in real life, but for the sake of completeness...
         # we can assume that *somehow* the unique job that was being tracked was already
         # processed and therefore this should be a no-op
-        it "does not execute the method" do
+        it 'does not execute the method' do
           DummyObject.should_not_receive(:do_something)
           perform
         end
