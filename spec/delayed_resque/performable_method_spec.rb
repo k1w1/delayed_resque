@@ -17,6 +17,10 @@ RSpec.describe DelayedResque::PerformableMethod do
 
   let(:redis) { ::Resque.redis }
 
+  describe "#store" do
+
+  end
+
   describe ".perform" do
     subject(:perform) do
       perform_job(described_class, base_job_options.merge(additional_job_options))

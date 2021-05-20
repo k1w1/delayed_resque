@@ -30,6 +30,10 @@ end
 
 RSpec.configure do |config|
   config.include ActiveSupport::Testing::TimeHelpers
+  config.include PerformJob
 
-  config.before { Resque.redis = MockRedis.new }
+  config.before do
+    Resque.redis = MockRedis.new
+    ResqueSpec.reset!
+  end
 end

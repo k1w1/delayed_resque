@@ -2,10 +2,6 @@ require 'spec_helper'
 require 'resque_spec/scheduler'
 
 describe DelayedResque do
-  before do
-    ResqueSpec.reset!
-  end
-
   class DummyObject
     include DelayedResque::MessageSending
     @queue = "default"
@@ -130,6 +126,12 @@ describe DelayedResque do
     end
 
     it 'enqueues non-scheduled unique jobs, keeping track of the last' do
+      base_job_args = {
+        'obj' => 'CLASS:DummyObject',
+        'method' => :first_method,
+        'args' => [123],
+      }
+
       stored_args = {
         'obj' => 'CLASS:DummyObject',
         'method' => :first_method,
