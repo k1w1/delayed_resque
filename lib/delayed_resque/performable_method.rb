@@ -5,6 +5,7 @@ module DelayedResque
     CLASS_STRING_FORMAT = /^CLASS\:([A-Z][\w\:]+)$/
     AR_STRING_FORMAT = /^AR\:([A-Z][\w\:]+)\:(\d+)$/
 
+    UNIQUE_JOBS_NAME = "unique_jobs"
     UNIQUE_JOB_ID = "job_uuid"
 
     def initialize(object, method, options, args)
@@ -24,6 +25,10 @@ module DelayedResque
       end
     end
 
+    def queue
+      @options[:queue] || self.class.queue
+    end
+
     def self.queue
       @queue || "default"
     end
@@ -37,9 +42,12 @@ module DelayedResque
     end
 
     def self.around_perform_with_unique(options)
-      if !options.key?(UNIQUE_JOB_ID) || options[UNIQUE_JOB_ID] == DelayedResque::DelayProxy.last_unique_job_id(options)
-        yield options
+      if options[UNIQUE_JOB_ID].present? && options[UNIQUE_JOB_ID] != last_unique_job_id(options)
+        ::Rails.logger.info("Ignoring duplicate copy of unique job. #{UNIQUE_JOB_ID}: #{options[UNIQUE_JOB_ID]}")
+        return
       end
+
+      yield options
     end
 
     def self.perform(options)
@@ -70,10 +78,34 @@ module DelayedResque
       hsh
     end
 
+    # Track each unique job so that we only execute it once
+    def self.track_unique_job(stored_options)
+      # We only care about tracking the last occurrence to be enqueued. The
+      # hset will overwrite any previous value for this job key
+      ::Resque.redis.hset(
+        UNIQUE_JOBS_NAME,
+        unique_job_key(stored_options),
+        stored_options[PerformableMethod::UNIQUE_JOB_ID]
+      )
+    end
+
+    # The unique job id that was most recently enqueued for this set of job
+    # options
+    def self.last_unique_job_id(stored_options)
+      ::Resque.redis.hget(UNIQUE_JOBS_NAME, unique_job_key(stored_options))
+    end
+
     private
 
     def unique_job_id
       @unique_job_id ||= ::SecureRandom.uuid
+    end
+
+    # Returns an encoded string representing the job options that are used to
+    # determine uniqueness when a job is enqueued with unique: true
+    def self.unique_job_key(stored_options)
+      # FYI - Redis has a limit of 512MB on the key size.
+      ::Resque.encode(stored_options.except(PerformableMethod::UNIQUE_JOB_ID))
     end
 
     def self.load(arg)

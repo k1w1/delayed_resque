@@ -6,8 +6,6 @@ module DelayedResque
     TRACKED_QUEUE_NAME = "trackedTasks"
     TRACKED_QUEUE_KEY = "tracked_task_key"
 
-    UNIQUE_JOBS_NAME = "unique_jobs"
-
     def initialize(payload_class, target, options)
       @payload_class = payload_class
       @target = target
@@ -31,34 +29,10 @@ module DelayedResque
       args_hash[TRACKED_QUEUE_KEY].presence if args_hash.is_a?(::Hash)
     end
 
-    # Returns an encoded string representing the job options that are used to
-    # determine uniqueness when a job is enqueued with unique: true
-    def self.unique_job_key(stored_options)
-      # FYI - Redis has a limit of 512MB on the key size.
-      ::Resque.encode(stored_options.except(PerformableMethod::UNIQUE_JOB_ID))
-    end
-
-    # The unique job id that was most recently enqueued for this set of job
-    # options
-    def self.last_unique_job_id(stored_options)
-      ::Resque.redis.hget(UNIQUE_JOBS_NAME, unique_job_key(stored_options))
-    end
-
-    # Track each unique job so that we only execute it once
-    def self.track_unique_job(stored_options)
-      # We only care about tracking the last occurrence to be enqueued. The
-      # hset will overwrite any previous value for this job key
-      ::Resque.redis.hset(
-        UNIQUE_JOBS_NAME,
-        unique_job_key(stored_options),
-        stored_options[PerformableMethod::UNIQUE_JOB_ID]
-      )
-    end
-
     def method_missing(method, *args)
-      queue = @options[:queue] || @payload_class.queue
       performable = @payload_class.new(@target, method.to_sym, @options, args)
       stored_options = performable.store
+      queue = performable.queue
 
       if @options[:tracked].present?
         ::DelayedResque::DelayProxy.track_task(@options[:tracked])
@@ -71,14 +45,9 @@ module DelayedResque
         # already exists. This can lead to issues when trying to remove
         # duplicates in a non-default queue
         @payload_class.with_queue(queue) do
-          if @options[:at] || @options[:in]
-            ::Resque.remove_delayed(@payload_class, stored_options)
-          else
-            # TODO: do we need to pass in the payload class here?
-            # How about the queue? (I suspect the answer to both is yes)
-            # Should this be in the same redis transaction as the RPUSH?
-            ::DelayedResque::DelayProxy.track_unique_job(stored_options)
-          end
+          # TODO: do we need to include the queue in uniqueness?
+          # Should this be in the same redis transaction as the RPUSH?
+          @payload_class.track_unique_job(stored_options)
         end
       elsif @options[:throttle]
         if @options[:at] || @options[:in]

@@ -23,7 +23,7 @@ ActiveRecord::Base.establish_connection(
 module PerformJob
   # Perform job inline, firing any resque hooks
   def perform_job(klass, *args)
-    resque_job = Resque::Job.new(:testqueue, 'class' => klass, 'args' => args)
+    resque_job = Resque::Job.new(:default, 'class' => klass, 'args' => args)
     resque_job.perform
   end
 end

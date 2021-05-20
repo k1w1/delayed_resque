@@ -139,11 +139,11 @@ describe DelayedResque do
         'job_uuid' => uuids.first
       }
 
-      expect(DelayedResque::DelayProxy.last_unique_job_id(stored_args)).to be_nil
+      expect(DelayedResque::PerformableMethod.last_unique_job_id(stored_args)).to be_nil
 
       DummyObject.delay(unique: true).first_method(123)
 
-      expect(DelayedResque::DelayProxy.last_unique_job_id(stored_args)).to eq(uuids.first)
+      expect(DelayedResque::PerformableMethod.last_unique_job_id(stored_args)).to eq(uuids.first)
       expect(DelayedResque::PerformableMethod).to have_queued(stored_args)
       expect(DelayedResque::PerformableMethod).to have_queue_size_of(1)
 
@@ -154,11 +154,11 @@ describe DelayedResque do
         't' => Time.now.to_f
       }
 
-      expect(DelayedResque::DelayProxy.last_unique_job_id(stored_args)).to be_nil
+      expect(DelayedResque::PerformableMethod.last_unique_job_id(stored_args)).to be_nil
 
       DummyObject.delay.first_method(124)
 
-      expect(DelayedResque::DelayProxy.last_unique_job_id(stored_args)).to be_nil
+      expect(DelayedResque::PerformableMethod.last_unique_job_id(stored_args)).to be_nil
       expect(DelayedResque::PerformableMethod).to have_queued(stored_args)
       expect(DelayedResque::PerformableMethod).to have_queue_size_of(2)
 
@@ -169,13 +169,13 @@ describe DelayedResque do
         'job_uuid' => uuids.second
       }
 
-      expect(DelayedResque::DelayProxy.last_unique_job_id(stored_args)).to eq(uuids.first)
+      expect(DelayedResque::PerformableMethod.last_unique_job_id(stored_args)).to eq(uuids.first)
 
       DummyObject.delay(unique: true).first_method(123)
 
       expect(DelayedResque::PerformableMethod).to have_queued(stored_args)
       expect(DelayedResque::PerformableMethod).to have_queue_size_of(3)
-      expect(DelayedResque::DelayProxy.last_unique_job_id(stored_args)).to eq(uuids.second)
+      expect(DelayedResque::PerformableMethod.last_unique_job_id(stored_args)).to eq(uuids.second)
     end
 
     it "can remove preceeding delayed jobs" do

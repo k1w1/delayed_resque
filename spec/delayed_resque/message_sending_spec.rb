@@ -82,7 +82,7 @@ RSpec.describe DelayedResque::MessageSending do
           delayed_method
           expect(
             Resque.redis.hget(
-              DelayedResque::DelayProxy::UNIQUE_JOBS_NAME,
+              DelayedResque::PerformableMethod::UNIQUE_JOBS_NAME,
               Resque.encode(base_job_options)
             )
           ).to eq(uuids.first)
@@ -94,7 +94,7 @@ RSpec.describe DelayedResque::MessageSending do
           # Force the first stub value to fire
           SecureRandom.uuid
           Resque.redis.hset(
-            DelayedResque::DelayProxy::UNIQUE_JOBS_NAME,
+            DelayedResque::PerformableMethod::UNIQUE_JOBS_NAME,
             Resque.encode(base_job_options),
             uuids.first
           )
@@ -123,7 +123,7 @@ RSpec.describe DelayedResque::MessageSending do
           delayed_method
           expect(
             Resque.redis.hget(
-              DelayedResque::DelayProxy::UNIQUE_JOBS_NAME,
+              DelayedResque::PerformableMethod::UNIQUE_JOBS_NAME,
               Resque.encode(base_job_options)
             )
           ).to eq(uuids.second)

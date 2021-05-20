@@ -4,10 +4,7 @@ RSpec.describe DelayedResque::PerformableMethod do
   include PerformJob
 
   class DummyObject
-    @queue = :testqueue
-
     def self.do_something(*args)
-      ::Kernel.puts("args: #{args.inspect}")
     end
   end
 
@@ -28,8 +25,33 @@ RSpec.describe DelayedResque::PerformableMethod do
   end
   let(:additional_job_options) { {} }
   let(:options) { base_job_options.merge(additional_job_options) }
+  let(:performable_class) { DummyObject }
   let(:performable) do
-    described_class.new(DummyObject, method, options, method_args)
+    described_class.new(performable_class, method, options, method_args)
+  end
+
+  describe '#queue' do
+    subject(:queue) { performable.queue }
+
+    context 'when there is no queue defined' do
+      let(:performable_class) do
+        Class.new do
+          def self.do_something; end
+        end
+      end
+
+      it 'uses the default queue' do
+        expect(queue).to eq('default')
+      end
+    end
+
+    context 'when there is a queue in the job options' do
+      let(:additional_job_options) { { queue: :custom_queue } }
+
+      it 'uses the queue from the job options' do
+        expect(queue).to eq(:custom_queue)
+      end
+    end
   end
 
   describe '#store' do
@@ -130,7 +152,7 @@ RSpec.describe DelayedResque::PerformableMethod do
       context 'when there is a unique job id being tracked' do
         before do
           redis.hset(
-            DelayedResque::DelayProxy::UNIQUE_JOBS_NAME,
+            described_class::UNIQUE_JOBS_NAME,
             ::Resque.encode(base_job_options),
             tracked_uuid
           )
