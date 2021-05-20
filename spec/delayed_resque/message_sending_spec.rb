@@ -74,7 +74,7 @@ RSpec.describe DelayedResque::MessageSending do
         it 'enqueues the job with the expected arguments' do
           delayed_method
           expect(DelayedResque::PerformableMethod).to have_queued(
-            base_job_options.merge(DelayedResque::DelayProxy::UNIQUE_JOB_ID => uuids.first)
+            base_job_options.merge(DelayedResque::PerformableMethod::UNIQUE_JOB_ID => uuids.first)
           ).in(queue_name)
         end
 
@@ -101,21 +101,21 @@ RSpec.describe DelayedResque::MessageSending do
           Resque.enqueue_to(
             queue_name,
             DelayedResque::PerformableMethod,
-            base_job_options.merge(DelayedResque::DelayProxy::UNIQUE_JOB_ID => uuids.first)
+            base_job_options.merge(DelayedResque::PerformableMethod::UNIQUE_JOB_ID => uuids.first)
           )
         end
 
         it 'leaves the original job in the queue' do
           delayed_method
           expect(DelayedResque::PerformableMethod).to have_queued(
-            base_job_options.merge(DelayedResque::DelayProxy::UNIQUE_JOB_ID => uuids.first)
+            base_job_options.merge(DelayedResque::PerformableMethod::UNIQUE_JOB_ID => uuids.first)
           ).in(queue_name)
         end
 
         it 'enqueues the job with the new unique id' do
           delayed_method
           expect(DelayedResque::PerformableMethod).to have_queued(
-            base_job_options.merge(DelayedResque::DelayProxy::UNIQUE_JOB_ID => uuids.second)
+            base_job_options.merge(DelayedResque::PerformableMethod::UNIQUE_JOB_ID => uuids.second)
           ).in(queue_name)
         end
 

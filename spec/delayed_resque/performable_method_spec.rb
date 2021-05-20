@@ -28,11 +28,12 @@ RSpec.describe DelayedResque::PerformableMethod do
   end
   let(:additional_job_options) { {} }
   let(:options) { base_job_options.merge(additional_job_options) }
+  let(:performable) do
+    described_class.new(DummyObject, method, options, method_args)
+  end
 
   describe '#store' do
-    subject(:store) do
-      described_class.new(DummyObject, method, options, method_args).store
-    end
+    subject(:store) { performable.store }
 
     it 'has the correct obj' do
       expect(store).to include('obj' => object)
@@ -44,6 +45,14 @@ RSpec.describe DelayedResque::PerformableMethod do
 
     it 'has the correct args' do
       expect(store).to include('args' => method_args)
+    end
+
+    it 'includes the current timestamp' do
+      expect(store).to include('t' => Time.now.to_f)
+    end
+
+    it 'does not include a unique job id' do
+      expect(store).to_not have_key(described_class::UNIQUE_JOB_ID)
     end
 
     context 'when job options include params' do
@@ -61,6 +70,17 @@ RSpec.describe DelayedResque::PerformableMethod do
 
       it 'does not include the timestamp' do
         expect(store).to_not have_key('t')
+      end
+
+      it 'generates a unique job id' do
+        uuid = SecureRandom.uuid
+        SecureRandom.stub(:uuid).and_return(uuid)
+        expect(store[described_class::UNIQUE_JOB_ID]).to eq(uuid)
+      end
+
+      it 'maintains a stable id for this job instance' do
+        expect(performable.store[described_class::UNIQUE_JOB_ID])
+          .to eq(performable.store[described_class::UNIQUE_JOB_ID])
       end
     end
 
@@ -102,7 +122,7 @@ RSpec.describe DelayedResque::PerformableMethod do
     end
 
     context 'when job has unique identifier' do
-      let(:additional_job_options) { { DelayedResque::DelayProxy::UNIQUE_JOB_ID => uuid } }
+      let(:additional_job_options) { { described_class::UNIQUE_JOB_ID => uuid } }
 
       let(:uuid) { ::SecureRandom.uuid }
       let(:other_uuid) { ::SecureRandom.uuid }

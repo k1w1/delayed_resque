@@ -5,6 +5,8 @@ module DelayedResque
     CLASS_STRING_FORMAT = /^CLASS\:([A-Z][\w\:]+)$/
     AR_STRING_FORMAT = /^AR\:([A-Z][\w\:]+)\:(\d+)$/
 
+    UNIQUE_JOB_ID = "job_uuid"
+
     def initialize(object, method, options, args)
       raise NoMethodError, "undefined method `#{method}' for #{object.inspect}" unless object.respond_to?(method)
 
@@ -35,9 +37,7 @@ module DelayedResque
     end
 
     def self.around_perform_with_unique(options)
-      job_id = options[DelayedResque::DelayProxy::UNIQUE_JOB_ID]
-
-      if job_id.blank? || job_id == DelayedResque::DelayProxy.last_unique_job_id(options)
+      if !options.key?(UNIQUE_JOB_ID) || options[UNIQUE_JOB_ID] == DelayedResque::DelayProxy.last_unique_job_id(options)
         yield options
       end
     end
@@ -64,10 +64,17 @@ module DelayedResque
       unless @options[:unique] || @options[:throttle] || @options[:at] || @options[:in]
         hsh["t"] = Time.now.to_f
       end
+
+      hsh[UNIQUE_JOB_ID] = unique_job_id if @options[:unique]
+
       hsh
     end
 
     private
+
+    def unique_job_id
+      @unique_job_id ||= ::SecureRandom.uuid
+    end
 
     def self.load(arg)
       case arg
