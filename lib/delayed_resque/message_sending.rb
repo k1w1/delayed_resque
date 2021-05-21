@@ -40,15 +40,7 @@ module DelayedResque
       end
 
       if @options[:unique]
-        # remove_delayed uses @payload_class.queue rather than the queue
-        # value within stored_options to determine whether or not a job
-        # already exists. This can lead to issues when trying to remove
-        # duplicates in a non-default queue
-        @payload_class.with_queue(queue) do
-          # TODO: do we need to include the queue in uniqueness?
-          # Should this be in the same redis transaction as the RPUSH?
-          @payload_class.track_unique_job(stored_options)
-        end
+        performable.track_unique_job
       elsif @options[:throttle]
         if @options[:at] || @options[:in]
           # This isn't perfect -- if a job is removed from the queue
@@ -76,7 +68,6 @@ module DelayedResque
       end
     end
   end
-
 
   module MessageSending
     def delay(options = {})

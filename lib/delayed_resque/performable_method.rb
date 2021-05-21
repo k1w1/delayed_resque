@@ -25,6 +25,12 @@ module DelayedResque
       end
     end
 
+    def unique_job_id
+      return unless @options[:unique]
+
+      @unique_job_id ||= ::SecureRandom.uuid
+    end
+
     def queue
       @options[:queue] || self.class.queue
     end
@@ -42,9 +48,13 @@ module DelayedResque
     end
 
     def self.around_perform_with_unique(options)
-      if options[UNIQUE_JOB_ID].present? && options[UNIQUE_JOB_ID] != last_unique_job_id(options)
-        ::Rails.logger.info("Ignoring duplicate copy of unique job. #{UNIQUE_JOB_ID}: #{options[UNIQUE_JOB_ID]}")
-        return
+      if options[UNIQUE_JOB_ID]
+        if options[UNIQUE_JOB_ID] != last_unique_job_id(options)
+          ::Rails.logger.info("Ignoring duplicate copy of unique job. #{UNIQUE_JOB_ID}: #{options[UNIQUE_JOB_ID]}")
+          return
+        end
+
+        untrack_unique_job(options)
       end
 
       yield options
@@ -78,14 +88,24 @@ module DelayedResque
       hsh
     end
 
-    # Track each unique job so that we only execute it once
-    def self.track_unique_job(stored_options)
+    def track_unique_job
+      return unless @options[:unique]
+
       # We only care about tracking the last occurrence to be enqueued. The
       # hset will overwrite any previous value for this job key
       ::Resque.redis.hset(
         UNIQUE_JOBS_NAME,
-        unique_job_key(stored_options),
-        stored_options[PerformableMethod::UNIQUE_JOB_ID]
+        unique_job_key,
+        store[PerformableMethod::UNIQUE_JOB_ID]
+      )
+    end
+
+    def self.untrack_unique_job(stored_options)
+      return unless stored_options.key?(UNIQUE_JOB_ID)
+
+      ::Resque.redis.hdel(
+        UNIQUE_JOBS_NAME,
+        unique_job_key(stored_options)
       )
     end
 
@@ -97,15 +117,15 @@ module DelayedResque
 
     private
 
-    def unique_job_id
-      @unique_job_id ||= ::SecureRandom.uuid
-    end
-
     # Returns an encoded string representing the job options that are used to
     # determine uniqueness when a job is enqueued with unique: true
     def self.unique_job_key(stored_options)
       # FYI - Redis has a limit of 512MB on the key size.
       ::Resque.encode(stored_options.except(PerformableMethod::UNIQUE_JOB_ID))
+    end
+
+    def unique_job_key
+      self.class.unique_job_key(store)
     end
 
     def self.load(arg)
