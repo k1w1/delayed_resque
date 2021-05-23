@@ -3,6 +3,8 @@ require 'active_support'
 
 module DelayedResque
   class DelayProxy < ActiveSupport::ProxyObject
+    include UniqueJobs
+
     TRACKED_QUEUE_NAME = "trackedTasks"
     TRACKED_QUEUE_KEY = "tracked_task_key"
 
@@ -40,7 +42,7 @@ module DelayedResque
       end
 
       if @options[:unique]
-        @payload_class.track_unique_job(stored_options)
+        DelayProxy.track_unique_job(stored_options)
       elsif @options[:throttle]
         if @options[:at] || @options[:in]
           # This isn't perfect -- if a job is removed from the queue

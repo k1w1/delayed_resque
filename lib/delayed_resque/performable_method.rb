@@ -2,11 +2,10 @@ require 'active_record'
 
 module DelayedResque
   class PerformableMethod < Struct.new(:object, :method, :args)
+    include UniqueJobs
+
     CLASS_STRING_FORMAT = /^CLASS\:([A-Z][\w\:]+)$/
     AR_STRING_FORMAT = /^AR\:([A-Z][\w\:]+)\:(\d+)$/
-
-    UNIQUE_JOBS_NAME = "unique_jobs"
-    UNIQUE_JOB_ID = "job_uuid"
 
     def initialize(object, method, options, args)
       raise NoMethodError, "undefined method `#{method}' for #{object.inspect}" unless object.respond_to?(method)
@@ -48,8 +47,8 @@ module DelayedResque
     end
 
     def self.around_perform_with_unique(options)
-      if options[UNIQUE_JOB_ID]
-        if options[UNIQUE_JOB_ID] != last_unique_job_id(options)
+      if unique_job?(options)
+        unless last_unique_job?(options)
           ::Rails.logger.info("Ignoring duplicate copy of unique job. #{UNIQUE_JOB_ID}: #{options[UNIQUE_JOB_ID]}")
           return
         end
@@ -86,36 +85,6 @@ module DelayedResque
       hsh[UNIQUE_JOB_ID] = unique_job_id if @options[:unique]
 
       hsh
-    end
-
-    def self.track_unique_job(stored_options)
-      # We only care about tracking the last occurrence to be enqueued. The
-      # hset will overwrite any previous value for this job key
-      ::Resque.redis.hset(
-        UNIQUE_JOBS_NAME,
-        unique_job_key(stored_options),
-        stored_options[UNIQUE_JOB_ID]
-      )
-    end
-
-    def self.untrack_unique_job(stored_options)
-      ::Resque.redis.hdel(
-        UNIQUE_JOBS_NAME,
-        unique_job_key(stored_options)
-      )
-    end
-
-    # The unique job id that was most recently enqueued for this set of job
-    # options
-    def self.last_unique_job_id(stored_options)
-      ::Resque.redis.hget(UNIQUE_JOBS_NAME, unique_job_key(stored_options))
-    end
-
-    # Returns an encoded string representing the job options that are used to
-    # determine uniqueness when a job is enqueued with unique: true
-    def self.unique_job_key(stored_options)
-      # FYI - Redis has a limit of 512MB on the key size.
-      ::Resque.encode(stored_options.except(PerformableMethod::UNIQUE_JOB_ID))
     end
 
     private
