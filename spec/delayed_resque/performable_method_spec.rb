@@ -6,6 +6,9 @@ RSpec.describe DelayedResque::PerformableMethod do
   class DummyObject
     def self.do_something(*args)
     end
+
+    def self.do_something_else(*args)
+    end
   end
 
   around do |ex|
@@ -158,37 +161,29 @@ RSpec.describe DelayedResque::PerformableMethod do
     end
   end
 
-  describe '#track_unique_job' do
-    subject(:track_unique_job) { performable.track_unique_job }
+  describe '.track_unique_job' do
+    subject(:track_unique_job) { described_class.track_unique_job(options) }
 
-    context 'when options do not include unique' do
-      it 'is a no-op' do
-        expect { track_unique_job }.to_not(change { redis.hgetall(described_class::UNIQUE_JOBS_NAME) })
+    let(:additional_job_options) { { described_class::UNIQUE_JOB_ID => SecureRandom.uuid } }
+
+    context 'when there is no existing entry for this job' do
+      it 'saves the uuid in the unique jobs hash' do
+        track_unique_job
+        expect(redis.hget(described_class::UNIQUE_JOBS_NAME, encoded_job_key)).to eq(uuids.first)
       end
     end
 
-    context 'when options include unique: true' do
-      let(:additional_job_options) { { unique: true } }
-
-      context 'when there is no existing entry for this job' do
-        it 'saves the uuid in the unique jobs hash' do
-          track_unique_job
-          expect(redis.hget(described_class::UNIQUE_JOBS_NAME, encoded_job_key)).to eq(uuids.first)
-        end
+    context 'when there is already an entry for this job' do
+      before do
+        redis.hset(
+          described_class::UNIQUE_JOBS_NAME,
+          encoded_job_key,
+          SecureRandom.uuid
+        )
       end
 
-      context 'when there is already an entry for this job' do
-        before do
-          redis.hset(
-            described_class::UNIQUE_JOBS_NAME,
-            encoded_job_key,
-            SecureRandom.uuid
-          )
-        end
-
-        it 'overwrites the uuid in the unique jobs hash' do
-          expect { track_unique_job }.to(change { redis.hget(described_class::UNIQUE_JOBS_NAME, encoded_job_key) }.from(uuids.first).to(uuids.second))
-        end
+      it 'overwrites the uuid in the unique jobs hash' do
+        expect { track_unique_job }.to(change { redis.hget(described_class::UNIQUE_JOBS_NAME, encoded_job_key) }.from(uuids.first).to(uuids.second))
       end
     end
   end
@@ -198,38 +193,19 @@ RSpec.describe DelayedResque::PerformableMethod do
 
     let(:additional_job_options) { { described_class::UNIQUE_JOB_ID => SecureRandom.uuid } }
 
-
-    context 'when there is no matching unique job being tracked' do
-      it 'no-ops' do
-        expect { untrack_unique_job }.to_not(change { redis.hgetall(described_class::UNIQUE_JOBS_NAME) })
-      end
+    before do
+      redis.hset(
+        described_class::UNIQUE_JOBS_NAME,
+        encoded_job_key,
+        uuids.first
+      )
     end
 
-    context 'when a unique job is being tracked' do
-      before do
-        redis.hset(
-          described_class::UNIQUE_JOBS_NAME,
-          encoded_job_key,
-          uuids.first
-        )
-      end
-
-      context 'when there is a unique job id' do
-        it 'removes the matching hash entry' do
-          expect { untrack_unique_job }.to(
-            change { redis.hget(described_class::UNIQUE_JOBS_NAME, encoded_job_key) }
-              .from(uuids.first).to(nil)
-          )
-        end
-      end
-
-      context 'when there is no unique job id' do
-        let(:additional_job_options) { {} }
-
-        it 'no-ops' do
-          expect { untrack_unique_job }.to_not(change { redis.hgetall(described_class::UNIQUE_JOBS_NAME) })
-        end
-      end
+    it 'removes the matching hash entry' do
+      expect { untrack_unique_job }.to(
+        change { redis.hget(described_class::UNIQUE_JOBS_NAME, encoded_job_key) }
+          .from(uuids.first).to(nil)
+      )
     end
   end
 
@@ -257,6 +233,48 @@ RSpec.describe DelayedResque::PerformableMethod do
       it 'returns the tracked job id' do
         expect(last_unique_job_id).to eq(tracked_uuid)
       end
+    end
+  end
+
+  describe '.unique_job_key' do
+    def unique_job_key_with(additional_options = {})
+      described_class.unique_job_key(base_job_options.merge(additional_options))
+    end
+
+    it 'is the same when job options are the same' do
+      expect(unique_job_key_with).to eq(unique_job_key_with)
+    end
+
+    it 'is the same when job uuids are different' do
+      key_with_uuid1 = unique_job_key_with(described_class::UNIQUE_JOB_ID => uuids.first)
+      key_with_uuid2 = unique_job_key_with(described_class::UNIQUE_JOB_ID => uuids.second)
+      expect(key_with_uuid1).to eq(key_with_uuid2)
+    end
+
+    it 'is different when performable class is different' do
+      key_dummy_object = unique_job_key_with(obj: 'CLASS:DummyObject')
+      key_dummy_model = unique_job_key_with(klass: 'AR:DummyModel:12345')
+      expect(key_dummy_object).to_not eq(key_dummy_model)
+    end
+
+    it 'is different when method name is different' do
+      expect(unique_job_key_with(method: :do_something)).to_not eq(unique_job_key_with(method: :do_something_else))
+    end
+
+    it 'is different when args are different' do
+      expect(unique_job_key_with(args: [:foo])).to_not eq(unique_job_key_with(args: [:bar]))
+    end
+
+    it 'is different when params are different' do
+      key_param1 = unique_job_key_with(additional_options: { params: { foo: :bar } })
+      key_param2 = unique_job_key_with(additional_options: { params: { foo: :baz } })
+      expect(key_param1).to_not eq(key_param2)
+    end
+
+    it 'is different when tracked are different' do
+      key_tracked1 = unique_job_key_with(additional_options: { tracked: 'abc123' })
+      key_tracked2 = unique_job_key_with(additional_options: { tracked: 'xyz789' })
+      expect(key_tracked1).to_not eq(key_tracked2)
     end
   end
 

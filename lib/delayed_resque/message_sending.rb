@@ -40,7 +40,7 @@ module DelayedResque
       end
 
       if @options[:unique]
-        performable.track_unique_job
+        @payload_class.track_unique_job(stored_options)
       elsif @options[:throttle]
         if @options[:at] || @options[:in]
           # This isn't perfect -- if a job is removed from the queue

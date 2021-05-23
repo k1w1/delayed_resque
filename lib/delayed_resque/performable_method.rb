@@ -88,21 +88,17 @@ module DelayedResque
       hsh
     end
 
-    def track_unique_job
-      return unless @options[:unique]
-
+    def self.track_unique_job(stored_options)
       # We only care about tracking the last occurrence to be enqueued. The
       # hset will overwrite any previous value for this job key
       ::Resque.redis.hset(
         UNIQUE_JOBS_NAME,
-        unique_job_key,
-        store[PerformableMethod::UNIQUE_JOB_ID]
+        unique_job_key(stored_options),
+        stored_options[UNIQUE_JOB_ID]
       )
     end
 
     def self.untrack_unique_job(stored_options)
-      return unless stored_options.key?(UNIQUE_JOB_ID)
-
       ::Resque.redis.hdel(
         UNIQUE_JOBS_NAME,
         unique_job_key(stored_options)
@@ -115,8 +111,6 @@ module DelayedResque
       ::Resque.redis.hget(UNIQUE_JOBS_NAME, unique_job_key(stored_options))
     end
 
-    private
-
     # Returns an encoded string representing the job options that are used to
     # determine uniqueness when a job is enqueued with unique: true
     def self.unique_job_key(stored_options)
@@ -124,9 +118,7 @@ module DelayedResque
       ::Resque.encode(stored_options.except(PerformableMethod::UNIQUE_JOB_ID))
     end
 
-    def unique_job_key
-      self.class.unique_job_key(store)
-    end
+    private
 
     def self.load(arg)
       case arg
