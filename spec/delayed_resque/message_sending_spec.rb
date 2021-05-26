@@ -62,7 +62,7 @@ RSpec.describe DelayedResque::MessageSending do
 
     context 'when job is unique' do
       let(:job_options) { { unique: true } }
-
+      let(:encoded_job_key) { Digest::SHA256.hexdigest(Resque.encode(base_job_options)) }
       let(:uuids) { Array.new(3) { SecureRandom.uuid } }
 
       before do
@@ -74,7 +74,7 @@ RSpec.describe DelayedResque::MessageSending do
         it 'enqueues the job with the expected arguments' do
           delayed_method
           expect(DelayedResque::PerformableMethod).to have_queued(
-            base_job_options.merge(DelayedResque::PerformableMethod::UNIQUE_JOB_ID => uuids.first)
+            base_job_options.merge(DelayedResque::PerformableMethod::UNIQUE_JOB_ID => "default_#{uuids.first}")
           ).in(queue_name)
         end
 
@@ -83,9 +83,9 @@ RSpec.describe DelayedResque::MessageSending do
           expect(
             Resque.redis.hget(
               DelayedResque::PerformableMethod::UNIQUE_JOBS_NAME,
-              Resque.encode(base_job_options)
+              encoded_job_key
             )
-          ).to eq(uuids.first)
+          ).to eq("default_#{uuids.first}")
         end
       end
 
@@ -95,27 +95,27 @@ RSpec.describe DelayedResque::MessageSending do
           SecureRandom.uuid
           Resque.redis.hset(
             DelayedResque::PerformableMethod::UNIQUE_JOBS_NAME,
-            Resque.encode(base_job_options),
-            uuids.first
+            encoded_job_key,
+            "default_#{uuids.first}"
           )
           Resque.enqueue_to(
             queue_name,
             DelayedResque::PerformableMethod,
-            base_job_options.merge(DelayedResque::PerformableMethod::UNIQUE_JOB_ID => uuids.first)
+            base_job_options.merge(DelayedResque::PerformableMethod::UNIQUE_JOB_ID => "default_#{uuids.first}")
           )
         end
 
         it 'leaves the original job in the queue' do
           delayed_method
           expect(DelayedResque::PerformableMethod).to have_queued(
-            base_job_options.merge(DelayedResque::PerformableMethod::UNIQUE_JOB_ID => uuids.first)
+            base_job_options.merge(DelayedResque::PerformableMethod::UNIQUE_JOB_ID => "default_#{uuids.first}")
           ).in(queue_name)
         end
 
         it 'enqueues the job with the new unique id' do
           delayed_method
           expect(DelayedResque::PerformableMethod).to have_queued(
-            base_job_options.merge(DelayedResque::PerformableMethod::UNIQUE_JOB_ID => uuids.second)
+            base_job_options.merge(DelayedResque::PerformableMethod::UNIQUE_JOB_ID => "default_#{uuids.second}")
           ).in(queue_name)
         end
 
@@ -124,9 +124,9 @@ RSpec.describe DelayedResque::MessageSending do
           expect(
             Resque.redis.hget(
               DelayedResque::PerformableMethod::UNIQUE_JOBS_NAME,
-              Resque.encode(base_job_options)
+              encoded_job_key
             )
-          ).to eq(uuids.second)
+          ).to eq("default_#{uuids.second}")
         end
       end
     end
