@@ -24,12 +24,6 @@ module DelayedResque
       end
     end
 
-    def unique_job_id
-      return unless @options[:unique]
-
-      @unique_job_id ||= self.class.generate_unique_job_id(queue: queue)
-    end
-
     def queue
       @options[:queue] || self.class.queue
     end

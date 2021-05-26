@@ -7,6 +7,12 @@ module DelayedResque
     UNIQUE_JOBS_NAME = "unique_jobs"
     UNIQUE_JOB_ID = "job_id"
 
+    def unique_job_id
+      return unless @options[:unique]
+
+      @unique_job_id ||= self.class.generate_unique_job_id(queue: queue)
+    end
+
     class_methods do
       # Track the last occurrence of a unique job to be enqueued
       def track_unique_job(stored_options)

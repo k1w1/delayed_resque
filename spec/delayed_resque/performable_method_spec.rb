@@ -139,36 +139,6 @@ RSpec.describe DelayedResque::PerformableMethod do
     end
   end
 
-  describe '#unique_job_id' do
-    subject(:unique_job_id) { performable.unique_job_id }
-
-    context 'when options do not include unique' do
-      it 'does not set a unique job id' do
-        expect(unique_job_id).to be_nil
-      end
-    end
-
-    context 'when options include unique: true' do
-      let(:additional_job_options) { { unique: true } }
-
-      it 'generates a unique job id' do
-        expect(unique_job_id).to eq("default_#{uuids.first}")
-      end
-
-      it 'maintains a stable unique job id for this instance' do
-        expect(unique_job_id).to eq(performable.unique_job_id)
-      end
-
-      context 'with non-default queue' do
-        let(:additional_job_options) { { unique: true, queue: :custom } }
-
-        it 'generates a unique job id' do
-          expect(unique_job_id).to eq("custom_#{uuids.first}")
-        end
-      end
-    end
-  end
-
   describe '.perform' do
     subject(:perform) { perform_job(described_class, options) }
 
