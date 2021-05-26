@@ -5,12 +5,12 @@ module DelayedResque
     extend ActiveSupport::Concern
 
     UNIQUE_JOBS_NAME = "unique_jobs"
-    UNIQUE_JOB_ID = "job_uuid"
+    UNIQUE_JOB_ID = "job_id"
 
     class_methods do
       # Track the last occurrence of a unique job to be enqueued
       def track_unique_job(stored_options)
-        ::Resque.redis.hset(
+        Resque.redis.hset(
           UNIQUE_JOBS_NAME,
           unique_job_key(stored_options),
           stored_options[UNIQUE_JOB_ID]
@@ -19,7 +19,7 @@ module DelayedResque
 
       # Untrack the last occurrence of a unique job to be enqueued
       def untrack_unique_job(stored_options)
-        ::Resque.redis.hdel(
+        Resque.redis.hdel(
           UNIQUE_JOBS_NAME,
           unique_job_key(stored_options)
         )
@@ -28,7 +28,7 @@ module DelayedResque
       # The unique job id that was most recently enqueued for this set of job
       # options
       def last_unique_job_id(stored_options)
-        ::Resque.redis.hget(UNIQUE_JOBS_NAME, unique_job_key(stored_options))
+        Resque.redis.hget(UNIQUE_JOBS_NAME, unique_job_key(stored_options))
       end
 
       # Returns true if stored_options are for a unique job
@@ -46,7 +46,12 @@ module DelayedResque
       # determine uniqueness when a job is enqueued with unique: true
       def unique_job_key(stored_options)
         # FYI - Redis has a limit of 512MB on the key size.
-        ::Resque.encode(stored_options.except(UNIQUE_JOB_ID))
+        Resque.encode(stored_options.except(UNIQUE_JOB_ID))
+      end
+
+      # Generate a new unique job id
+      def generate_unique_job_id(queue: nil)
+        "#{queue || :default}_#{SecureRandom.uuid}"
       end
     end
   end

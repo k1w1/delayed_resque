@@ -105,7 +105,7 @@ RSpec.describe DelayedResque::PerformableMethod do
       end
 
       it 'generates a unique job id' do
-        expect(store[described_class::UNIQUE_JOB_ID]).to eq(uuids.first)
+        expect(store[described_class::UNIQUE_JOB_ID]).to eq("default_#{uuids.first}")
       end
 
       it 'maintains a stable id for this job instance' do
@@ -152,11 +152,19 @@ RSpec.describe DelayedResque::PerformableMethod do
       let(:additional_job_options) { { unique: true } }
 
       it 'generates a unique job id' do
-        expect(unique_job_id).to eq(uuids.first)
+        expect(unique_job_id).to eq("default_#{uuids.first}")
       end
 
       it 'maintains a stable unique job id for this instance' do
         expect(unique_job_id).to eq(performable.unique_job_id)
+      end
+
+      context 'with non-default queue' do
+        let(:additional_job_options) { { unique: true, queue: :custom } }
+
+        it 'generates a unique job id' do
+          expect(unique_job_id).to eq("custom_#{uuids.first}")
+        end
       end
     end
   end

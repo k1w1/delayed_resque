@@ -17,6 +17,11 @@ RSpec.describe DelayedResque::UniqueJobs do
   let(:options) { base_job_options.merge(additional_job_options) }
   let(:uuids) { Array.new(2) { SecureRandom.uuid } }
 
+  before do
+    uuids
+    SecureRandom.stub(:uuid).and_return(*uuids)
+  end
+
   let(:performable_class) { Class.new { include DelayedResque::UniqueJobs } }
 
   describe '.track_unique_job' do
@@ -195,6 +200,33 @@ RSpec.describe DelayedResque::UniqueJobs do
       key_tracked1 = unique_job_key_with(additional_options: { tracked: 'abc123' })
       key_tracked2 = unique_job_key_with(additional_options: { tracked: 'xyz789' })
       expect(key_tracked1).to_not eq(key_tracked2)
+    end
+  end
+
+  describe '.generate_unique_job_id' do
+    def generate_unique_job_id
+      performable_class.generate_unique_job_id(queue: queue)
+    end
+
+    context 'with default queue' do
+      let(:queue) {}
+
+      it 'generates a unique job id' do
+        expect(generate_unique_job_id).to eq("default_#{uuids.first}")
+      end
+
+      it 'generates a new job id each time it is called' do
+        generate_unique_job_id
+        expect(generate_unique_job_id).to eq("default_#{uuids.second}")
+      end
+    end
+
+    context 'with non-default queue' do
+      let(:queue) { :custom }
+
+      it 'includes the queue name in the job id' do
+        expect(generate_unique_job_id).to eq("custom_#{uuids.first}")
+      end
     end
   end
 end
