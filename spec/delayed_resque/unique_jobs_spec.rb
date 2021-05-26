@@ -12,7 +12,7 @@ RSpec.describe DelayedResque::UniqueJobs do
       'args' => method_args
     }
   end
-  let(:encoded_job_key) { Resque.encode(base_job_options) }
+  let(:encoded_job_key) { Digest::SHA256.hexdigest(Resque.encode(base_job_options)) }
   let(:additional_job_options) { {} }
   let(:options) { base_job_options.merge(additional_job_options) }
   let(:uuids) { Array.new(2) { SecureRandom.uuid } }

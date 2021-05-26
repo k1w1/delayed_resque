@@ -45,8 +45,10 @@ module DelayedResque
       # Returns an encoded string representing the job options that are used to
       # determine uniqueness when a job is enqueued with unique: true
       def unique_job_key(stored_options)
-        # FYI - Redis has a limit of 512MB on the key size.
-        Resque.encode(stored_options.except(UNIQUE_JOB_ID))
+        # Redis has a key size limit of 512MB but for optimal performance, they
+        # recommend keeping keys under 1KB
+        encoded_job = Resque.encode(stored_options.except(UNIQUE_JOB_ID))
+        Digest::SHA256.hexdigest(encoded_job)
       end
 
       # Generate a new unique job id
