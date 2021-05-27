@@ -9,4 +9,5 @@ group :test do
   gem 'rspec-rails'
   gem 'resque_spec', :git => "git@github.com:k1w1/resque_spec.git"
   gem 'sqlite3'
+  gem 'mock_redis'
 end

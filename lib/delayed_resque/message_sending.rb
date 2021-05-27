@@ -3,8 +3,11 @@ require 'active_support'
 
 module DelayedResque
   class DelayProxy < ActiveSupport::ProxyObject
+    include UniqueJobs
+
     TRACKED_QUEUE_NAME = "trackedTasks"
     TRACKED_QUEUE_KEY = "tracked_task_key"
+
     def initialize(payload_class, target, options)
       @payload_class = payload_class
       @target = target
@@ -29,9 +32,9 @@ module DelayedResque
     end
 
     def method_missing(method, *args)
-      queue = @options[:queue] || @payload_class.queue
       performable = @payload_class.new(@target, method.to_sym, @options, args)
       stored_options = performable.store
+      queue = performable.queue
 
       if @options[:tracked].present?
         ::DelayedResque::DelayProxy.track_task(@options[:tracked])
@@ -39,17 +42,7 @@ module DelayedResque
       end
 
       if @options[:unique]
-        # remove_delayed uses @payload_class.queue rather than the queue
-        # value within stored_options to determine whether or not a job
-        # already exists. This can lead to issues when trying to remove
-        # duplicates in a non-default queue
-        @payload_class.with_queue(queue) do
-          if @options[:at] || @options[:in]
-            ::Resque.remove_delayed(@payload_class, stored_options)
-          else
-            ::Resque.dequeue(@payload_class, stored_options)
-          end
-        end
+        DelayProxy.track_unique_job(stored_options)
       elsif @options[:throttle]
         if @options[:at] || @options[:in]
           # This isn't perfect -- if a job is removed from the queue
@@ -77,7 +70,6 @@ module DelayedResque
       end
     end
   end
-
 
   module MessageSending
     def delay(options = {})

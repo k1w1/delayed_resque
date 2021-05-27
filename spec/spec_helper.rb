@@ -1,6 +1,7 @@
 $LOAD_PATH.unshift(File.dirname(__FILE__))
 $LOAD_PATH.unshift(File.join(File.dirname(__FILE__), '..', 'lib'))
 require 'rspec'
+require 'mock_redis'
 require 'resque-scheduler'
 require 'resque_spec'
 require 'resque_spec/scheduler'
@@ -18,6 +19,21 @@ ActiveRecord::Base.establish_connection(
 	:database => "#{root}/test.db"
 )
 
+# Based on https://git.io/Js25d
+module PerformJob
+  # Perform job inline, firing any resque hooks
+  def perform_job(klass, *args)
+    resque_job = Resque::Job.new(:default, 'class' => klass, 'args' => args)
+    resque_job.perform
+  end
+end
+
 RSpec.configure do |config|
   config.include ActiveSupport::Testing::TimeHelpers
+  config.include PerformJob
+
+  config.before do
+    Resque.redis = MockRedis.new
+    ResqueSpec.reset!
+  end
 end

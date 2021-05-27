@@ -1,10 +1,7 @@
 require 'spec_helper'
 require 'resque_spec/scheduler'
-describe DelayedResque do
-  before do
-    ResqueSpec.reset!
-  end
 
+describe DelayedResque do
   class DummyObject
     include DelayedResque::MessageSending
     @queue = "default"
@@ -113,36 +110,117 @@ describe DelayedResque do
   end
 
   context "unique jobs" do
-    it "can remove preceeding unique jobs" do
-      travel_to Time.current do
-        DummyObject.delay(:unique => true).first_method(123)
-        DelayedResque::PerformableMethod.should have_queued({"obj"=>"CLASS:DummyObject", "method"=>:first_method, "args"=>[123]})
-        DelayedResque::PerformableMethod.should have_queue_size_of(1)
-        DummyObject.delay.first_method(124)
-        DelayedResque::PerformableMethod.should have_queue_size_of(2)
-        DummyObject.delay(:unique => true).first_method(123)
-        DelayedResque::PerformableMethod.should have_queue_size_of(2)
+    around do |ex|
+      # Freeze time to make comparison easy (and also to test against relying
+      # on timestamps for uniqueness)
+      travel_to(Time.current) do
+        ex.run
       end
     end
 
-    it "can remove preceeding delayed jobs" do
-      at_time = Time.now.utc + 10.minutes
-      DummyObject.delay(:at => at_time).first_method(123)
-      DelayedResque::PerformableMethod.should have_scheduled({"obj"=>"CLASS:DummyObject", "method"=>:first_method, "args"=>[123]}).at(at_time)
-      DelayedResque::PerformableMethod.should have_schedule_size_of(1)
-      DummyObject.delay(:at => at_time + 1).first_method(123)
-      DelayedResque::PerformableMethod.should have_schedule_size_of(2)
-      DummyObject.delay(:at => at_time + 2, :unique => true).first_method(123)
-      DelayedResque::PerformableMethod.should have_schedule_size_of(1)
+    let(:uuids) { Array.new(5) { SecureRandom.uuid } }
+
+    before do
+      uuids
+      SecureRandom.stub(:uuid).and_return(*uuids)
     end
 
-    it "can remove preceeding delayed jobs with a non-default queue" do
+    it 'enqueues non-scheduled unique jobs, keeping track of the last' do
+      stored_args = {
+        'obj' => 'CLASS:DummyObject',
+        'method' => :first_method,
+        'args' => [123],
+        DelayedResque::PerformableMethod::UNIQUE_JOB_ID => "default_#{uuids.first}"
+      }
+
+      expect(DelayedResque::PerformableMethod.last_unique_job_id(stored_args)).to be_nil
+
+      DummyObject.delay(unique: true).first_method(123)
+
+      expect(DelayedResque::PerformableMethod.last_unique_job_id(stored_args)).to eq("default_#{uuids.first}")
+      expect(DelayedResque::PerformableMethod).to have_queued(stored_args)
+      expect(DelayedResque::PerformableMethod).to have_queue_size_of(1)
+
+      stored_args = {
+        'obj' => 'CLASS:DummyObject',
+        'method' => :first_method,
+        'args' => [124],
+        't' => Time.now.to_f
+      }
+
+      expect(DelayedResque::PerformableMethod.last_unique_job_id(stored_args)).to be_nil
+
+      DummyObject.delay.first_method(124)
+
+      expect(DelayedResque::PerformableMethod.last_unique_job_id(stored_args)).to be_nil
+      expect(DelayedResque::PerformableMethod).to have_queued(stored_args)
+      expect(DelayedResque::PerformableMethod).to have_queue_size_of(2)
+
+      stored_args = {
+        'obj' => 'CLASS:DummyObject',
+        'method' => :first_method,
+        'args' => [123],
+        DelayedResque::PerformableMethod::UNIQUE_JOB_ID => "default_#{uuids.second}"
+      }
+
+      expect(DelayedResque::PerformableMethod.last_unique_job_id(stored_args)).to eq("default_#{uuids.first}")
+
+      DummyObject.delay(unique: true).first_method(123)
+
+      expect(DelayedResque::PerformableMethod).to have_queued(stored_args)
+      expect(DelayedResque::PerformableMethod).to have_queue_size_of(3)
+      expect(DelayedResque::PerformableMethod.last_unique_job_id(stored_args)).to eq("default_#{uuids.second}")
+    end
+
+    it "enqueues delayed jobs, keeping track of the last" do
+      at_time = Time.now.utc + 10.minutes
+      DummyObject.delay(:at => at_time).first_method(123)
+
+      stored_args = {
+        'obj' => 'CLASS:DummyObject',
+        'method' => :first_method,
+        'args' => [123],
+      }
+
+      expect(DelayedResque::PerformableMethod).to have_scheduled(stored_args).at(at_time)
+      expect(DelayedResque::PerformableMethod.last_unique_job_id(stored_args)).to be_nil
+
+      DummyObject.delay(:at => at_time + 1).first_method(123)
+
+      expect(DelayedResque::PerformableMethod).to have_scheduled(stored_args).at(at_time)
+      expect(DelayedResque::PerformableMethod).to have_scheduled(stored_args).at(at_time + 1)
+      expect(DelayedResque::PerformableMethod.last_unique_job_id(stored_args)).to be_nil
+
+      DummyObject.delay(:at => at_time + 2, :unique => true).first_method(123)
+
+      expect(DelayedResque::PerformableMethod).to have_scheduled(stored_args).at(at_time)
+      expect(DelayedResque::PerformableMethod).to have_scheduled(stored_args).at(at_time + 1)
+      args_with_job_id = stored_args.merge(DelayedResque::UniqueJobs::UNIQUE_JOB_ID => "default_#{uuids.first}")
+      expect(DelayedResque::PerformableMethod).to have_scheduled(args_with_job_id).at(at_time + 2)
+      expect(DelayedResque::PerformableMethod.last_unique_job_id(stored_args)).to eq("default_#{uuids.first}")
+    end
+
+    it "can overwrite preceeding delayed jobs with a non-default queue" do
       at_time = Time.now.utc + 10.minutes
       DummyObject.delay(at: at_time, unique: true, queue: :send_audit).first_method(123)
-      DelayedResque::PerformableMethod.should have_scheduled({"obj"=>"CLASS:DummyObject", "method"=>:first_method, "args"=>[123]}).at(at_time).queue(:send_audit)
-      DelayedResque::PerformableMethod.should have_schedule_size_of(1).queue(:send_audit)
+
+      stored_args = {
+        'obj' => 'CLASS:DummyObject',
+        'method' => :first_method,
+        'args' => [123]
+      }
+
+      args_with_job_id = stored_args.merge(DelayedResque::UniqueJobs::UNIQUE_JOB_ID => "send_audit_#{uuids.first}")
+      expect(DelayedResque::PerformableMethod).to have_scheduled(args_with_job_id).at(at_time).queue(:send_audit)
+      expect(DelayedResque::PerformableMethod.last_unique_job_id(args_with_job_id)).to eq("send_audit_#{uuids.first}")
+
       DummyObject.delay(at: at_time + 1, unique: true, queue: :send_audit).first_method(123)
-      DelayedResque::PerformableMethod.should have_schedule_size_of(1).queue(:send_audit)
+
+      expect(DelayedResque::PerformableMethod).to have_schedule_size_of(2).queue(:send_audit)
+
+      args_with_job_id = stored_args.merge(DelayedResque::UniqueJobs::UNIQUE_JOB_ID => "send_audit_#{uuids.second}")
+      expect(DelayedResque::PerformableMethod).to have_scheduled(args_with_job_id).at(at_time + 1).queue(:send_audit)
+      expect(DelayedResque::PerformableMethod.last_unique_job_id(args_with_job_id)).to eq("send_audit_#{uuids.second}")
     end
   end
 

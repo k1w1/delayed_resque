@@ -2,6 +2,8 @@ require 'active_record'
 
 module DelayedResque
   class PerformableMethod < Struct.new(:object, :method, :args)
+    include UniqueJobs
+
     CLASS_STRING_FORMAT = /^CLASS\:([A-Z][\w\:]+)$/
     AR_STRING_FORMAT = /^AR\:([A-Z][\w\:]+)\:(\d+)$/
 
@@ -22,6 +24,10 @@ module DelayedResque
       end
     end
 
+    def queue
+      @options[:queue] || self.class.queue
+    end
+
     def self.queue
       @queue || "default"
     end
@@ -33,7 +39,20 @@ module DelayedResque
     ensure
       @queue = old_queue
     end
-    
+
+    def self.around_perform_with_unique(options)
+      if unique_job?(options)
+        unless last_unique_job?(options)
+          ::Rails.logger.info("Ignoring duplicate copy of unique job. #{UNIQUE_JOB_ID}: #{options[UNIQUE_JOB_ID]}")
+          return
+        end
+
+        untrack_unique_job(options)
+      end
+
+      yield options
+    end
+
     def self.perform(options)
       object = options["obj"]
       method = options["method"]
@@ -56,6 +75,9 @@ module DelayedResque
       unless @options[:unique] || @options[:throttle] || @options[:at] || @options[:in]
         hsh["t"] = Time.now.to_f
       end
+
+      hsh[UNIQUE_JOB_ID] = unique_job_id if @options[:unique]
+
       hsh
     end
 
